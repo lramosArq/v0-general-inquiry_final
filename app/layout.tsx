@@ -10,9 +10,9 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "Arquimea Grants Search | Federal Grant Opportunities",
+  title: "Arquimea Grants Search | EU & USA Funding Opportunities",
   description:
-    "Search and discover federal grant opportunities from U.S. government agencies - Powered by Grants.gov API",
+    "Search and discover grant opportunities from EU and USA government agencies - Powered by Grants.gov and EU Funding & Tenders Portal",
   generator: "v0.app",
 }
 

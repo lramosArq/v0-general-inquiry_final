@@ -5,6 +5,23 @@ import { EUFundingFetcher } from "@/lib/eu-funding-fetcher"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+function mapGrantToFrontend(grant: any, source: "usa" | "eu") {
+  return {
+    id: grant.id,
+    opportunityNumber: grant.expedient || grant.id,
+    title: grant.title,
+    agency: grant.organization,
+    status: grant.status || "Open",
+    postedDate: grant.publishDate,
+    closeDate: grant.deadline,
+    description: grant.description,
+    category: grant.category,
+    fundingInstrument: grant.amount || grant.type,
+    source: source,
+    url: grant.url || grant.sourceUrl,
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -19,8 +36,8 @@ export async function POST(request: NextRequest) {
       try {
         const usaFetcher = new GrantsGovFetcher()
         const usaGrants = await usaFetcher.fetchAllGrants(keyword)
-        const usaGrantsWithSource = usaGrants.map((g) => ({ ...g, source: "usa" }))
-        allGrants.push(...usaGrantsWithSource)
+        const mappedUsaGrants = usaGrants.map((g) => mapGrantToFrontend(g, "usa"))
+        allGrants.push(...mappedUsaGrants)
         console.log(`[v0] USA grants fetched: ${usaGrants.length}`)
       } catch (error) {
         console.error("[v0] Error fetching USA grants:", error)
@@ -31,15 +48,16 @@ export async function POST(request: NextRequest) {
       try {
         const euFetcher = new EUFundingFetcher()
         const euGrants = await euFetcher.fetchAllGrants(keyword)
-        allGrants.push(...euGrants)
+        const mappedEuGrants = euGrants.map((g) => mapGrantToFrontend(g, "eu"))
+        allGrants.push(...mappedEuGrants)
         console.log(`[v0] EU grants fetched: ${euGrants.length}`)
       } catch (error) {
         console.error("[v0] Error fetching EU grants:", error)
       }
     }
 
-    // Sort by publish date (newest first)
-    allGrants.sort((a, b) => new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime())
+    // Sort by posted date (newest first)
+    allGrants.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime())
 
     console.log(`[v0] Total grants returned: ${allGrants.length}`)
 
@@ -78,8 +96,8 @@ export async function GET() {
     try {
       const usaFetcher = new GrantsGovFetcher()
       const usaGrants = await usaFetcher.fetchAllGrants()
-      const usaGrantsWithSource = usaGrants.map((g) => ({ ...g, source: "usa" }))
-      allGrants.push(...usaGrantsWithSource)
+      const mappedUsaGrants = usaGrants.map((g) => mapGrantToFrontend(g, "usa"))
+      allGrants.push(...mappedUsaGrants)
     } catch (error) {
       console.error("[v0] Error fetching USA grants:", error)
     }
@@ -88,13 +106,14 @@ export async function GET() {
     try {
       const euFetcher = new EUFundingFetcher()
       const euGrants = await euFetcher.fetchAllGrants()
-      allGrants.push(...euGrants)
+      const mappedEuGrants = euGrants.map((g) => mapGrantToFrontend(g, "eu"))
+      allGrants.push(...mappedEuGrants)
     } catch (error) {
       console.error("[v0] Error fetching EU grants:", error)
     }
 
-    // Sort by publish date
-    allGrants.sort((a, b) => new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime())
+    // Sort by posted date
+    allGrants.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime())
 
     return NextResponse.json({
       success: true,

@@ -21,6 +21,7 @@ export interface User {
   password: string
   name: string
   businessUnit: string
+  role: string
   alerts: UserAlert[]
   createdAt: string
   lastLogin?: string
@@ -31,19 +32,28 @@ export const ARQUIMEA_BUSINESS_UNITS = [
   "Connect",
   "Defense",
   "Space",
-  "CanarySat",
   "Molefy",
-  "Volinga",
   "Pulsar",
-  "Kaudal",
   "Research Center",
   "Other",
 ] as const
 
 export type BusinessUnit = (typeof ARQUIMEA_BUSINESS_UNITS)[number]
 
+const PREDEFINED_USERS: User[] = [
+  {
+    id: "user-jcmarin-001",
+    email: "jcmarin@arquimea.com",
+    password: "Arquimea2025",
+    name: "Juan Carlos Marín",
+    businessUnit: "Connect",
+    role: "Director de Arquimea Connect",
+    alerts: [],
+    createdAt: "2025-01-01T00:00:00.000Z",
+  },
+]
+
 // Simple in-memory/localStorage user service
-// In production, this should be replaced with a proper database
 export class UserService {
   private static instance: UserService
   private storageKey = "arquimea_users"
@@ -57,14 +67,30 @@ export class UserService {
   }
 
   private getUsers(): User[] {
-    if (typeof window === "undefined") return []
+    if (typeof window === "undefined") return [...PREDEFINED_USERS]
+
     const data = localStorage.getItem(this.storageKey)
-    return data ? JSON.parse(data) : []
+    const storedUsers: User[] = data ? JSON.parse(data) : []
+
+    // Combinar usuarios predefinidos con los almacenados, evitando duplicados
+    const allUsers = [...PREDEFINED_USERS]
+    for (const storedUser of storedUsers) {
+      const exists = allUsers.some((u) => u.email.toLowerCase() === storedUser.email.toLowerCase())
+      if (!exists) {
+        allUsers.push(storedUser)
+      }
+    }
+
+    return allUsers
   }
 
   private saveUsers(users: User[]): void {
     if (typeof window === "undefined") return
-    localStorage.setItem(this.storageKey, JSON.stringify(users))
+    // Solo guardar usuarios que no son predefinidos
+    const nonPredefinedUsers = users.filter(
+      (u) => !PREDEFINED_USERS.some((p) => p.email.toLowerCase() === u.email.toLowerCase()),
+    )
+    localStorage.setItem(this.storageKey, JSON.stringify(nonPredefinedUsers))
   }
 
   async register(
@@ -72,6 +98,7 @@ export class UserService {
     password: string,
     name: string,
     businessUnit: string,
+    role?: string,
   ): Promise<{ success: boolean; message: string; user?: User }> {
     const users = this.getUsers()
 
@@ -83,9 +110,10 @@ export class UserService {
     const newUser: User = {
       id: crypto.randomUUID(),
       email: email.toLowerCase(),
-      password, // In production, hash this!
+      password,
       name,
       businessUnit,
+      role: role || "",
       alerts: [],
       createdAt: new Date().toISOString(),
     }
@@ -93,10 +121,40 @@ export class UserService {
     users.push(newUser)
     this.saveUsers(users)
 
+    // Send registration notification email
+    try {
+      await fetch("/api/register-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newUser.name,
+          email: newUser.email,
+          businessUnit: newUser.businessUnit,
+          role: newUser.role,
+        }),
+      })
+    } catch (e) {
+      console.log("[v0] Could not send registration notification email")
+    }
+
     return { success: true, message: "Registro exitoso", user: newUser }
   }
 
   async login(email: string, password: string): Promise<{ success: boolean; message: string; user?: User }> {
+    // Primero verificar contra usuarios predefinidos directamente
+    const predefinedUser = PREDEFINED_USERS.find(
+      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
+    )
+
+    if (predefinedUser) {
+      const userWithLogin = { ...predefinedUser, lastLogin: new Date().toISOString() }
+      if (typeof window !== "undefined") {
+        localStorage.setItem(this.currentUserKey, JSON.stringify(userWithLogin))
+      }
+      return { success: true, message: "Login exitoso", user: userWithLogin }
+    }
+
+    // Luego verificar usuarios registrados
     const users = this.getUsers()
     const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password)
 
@@ -148,7 +206,6 @@ export class UserService {
     users[userIndex].alerts.push(newAlert)
     this.saveUsers(users)
 
-    // Update current user in session
     if (typeof window !== "undefined") {
       localStorage.setItem(this.currentUserKey, JSON.stringify(users[userIndex]))
     }
@@ -176,7 +233,6 @@ export class UserService {
     users[userIndex].alerts[alertIndex] = { ...users[userIndex].alerts[alertIndex], ...updates }
     this.saveUsers(users)
 
-    // Update current user in session
     if (typeof window !== "undefined") {
       localStorage.setItem(this.currentUserKey, JSON.stringify(users[userIndex]))
     }
@@ -195,7 +251,6 @@ export class UserService {
     users[userIndex].alerts = users[userIndex].alerts.filter((a) => a.id !== alertId)
     this.saveUsers(users)
 
-    // Update current user in session
     if (typeof window !== "undefined") {
       localStorage.setItem(this.currentUserKey, JSON.stringify(users[userIndex]))
     }

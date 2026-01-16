@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, User, LogOut, Bell, BarChart3, Loader2 } from "lucide-react"
-import { AuthModal } from "@/components/auth-modal"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2 } from "lucide-react"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
+import { LoginScreen } from "@/components/login-screen"
 import { UserService, type User as UserType } from "@/lib/user-service"
 
 interface Grant {
@@ -42,7 +42,7 @@ export default function GrantsSearchPage() {
   const itemsPerPage = 25
 
   const [currentUser, setCurrentUser] = useState<UserType | null>(null)
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [showAlertsPanel, setShowAlertsPanel] = useState(false)
 
   // Search filters
@@ -91,8 +91,6 @@ export default function GrantsSearchPage() {
     cybersecurity: false,
     ai: false,
     space: false,
-    biotech: false,
-    nasa: false,
   })
 
   const [agencyFilters, setAgencyFilters] = useState({
@@ -106,13 +104,16 @@ export default function GrantsSearchPage() {
     const userService = UserService.getInstance()
     const user = userService.getCurrentUser()
     if (user) {
-      setCurrentUser(user)
+      setCurrentUser({ ...user, alerts: user.alerts || [] })
     }
+    setIsCheckingAuth(false)
   }, [])
 
   useEffect(() => {
-    fetchGrants()
-  }, [])
+    if (currentUser) {
+      fetchGrants()
+    }
+  }, [currentUser])
 
   useEffect(() => {
     if (grants.length > 0) {
@@ -122,8 +123,8 @@ export default function GrantsSearchPage() {
 
   const fetchGrants = async () => {
     setIsLoading(true)
-    console.log("[v0] Fetching grants...")
     try {
+      console.log("[v0] Fetching grants...")
       const response = await fetch("/api/grants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -133,29 +134,25 @@ export default function GrantsSearchPage() {
         }),
       })
 
-      console.log("[v0] Response status:", response.status)
-
       if (response.ok) {
         const result = await response.json()
-        console.log("[v0] Data received:", JSON.stringify(result).substring(0, 200))
+        console.log("[v0] API Response:", result)
         const fetchedGrants = result.data || result.grants || []
-        console.log("[v0] Grants to set:", fetchedGrants.length)
+        console.log("[v0] Fetched grants count:", fetchedGrants.length)
         setGrants(fetchedGrants)
         setFilteredGrants(fetchedGrants)
       } else {
-        console.log("[v0] Response not OK:", response.statusText)
+        console.error("[v0] API Error:", response.status)
       }
     } catch (error) {
       console.error("[v0] Error fetching grants:", error)
     } finally {
       setIsLoading(false)
-      console.log("[v0] Loading finished")
     }
   }
 
   const applyFilters = () => {
     let filtered = [...grants]
-    console.log("[v0] Applying filters to", grants.length, "grants")
 
     // Source filter
     if (!sourceFilter.all) {
@@ -216,12 +213,6 @@ export default function GrantsSearchPage() {
           (titleLower.includes("space") || titleLower.includes("satellite") || titleLower.includes("gravimetry"))
         )
           return true
-        if (
-          categoryFilters.biotech &&
-          (titleLower.includes("biotech") || titleLower.includes("als") || titleLower.includes("neurodegenerative"))
-        )
-          return true
-        if (categoryFilters.nasa && (titleLower.includes("nasa") || g.agency.includes("NASA"))) return true
 
         return false
       })
@@ -243,7 +234,6 @@ export default function GrantsSearchPage() {
       }
     })
 
-    console.log("[v0] Filtered grants:", filtered.length)
     setFilteredGrants(filtered)
     setCurrentPage(1)
   }
@@ -267,8 +257,6 @@ export default function GrantsSearchPage() {
     if (categoryFilters.cybersecurity) categories.push("cybersecurity")
     if (categoryFilters.ai) categories.push("ai")
     if (categoryFilters.space) categories.push("space")
-    if (categoryFilters.biotech) categories.push("biotech")
-    if (categoryFilters.nasa) categories.push("nasa")
 
     const statuses: string[] = []
     if (statusFilters.forecasted) statuses.push("forecasted")
@@ -298,6 +286,12 @@ export default function GrantsSearchPage() {
     userService.logout()
     setCurrentUser(null)
     setShowAlertsPanel(false)
+    setGrants([])
+    setFilteredGrants([])
+  }
+
+  const handleAuthSuccess = (user: UserType) => {
+    setCurrentUser({ ...user, alerts: user.alerts || [] })
   }
 
   // Pagination
@@ -306,13 +300,25 @@ export default function GrantsSearchPage() {
   const paginatedGrants = filteredGrants.slice(startIndex, startIndex + itemsPerPage)
 
   const mapStatus = (status: string | undefined | null): "Forecasted" | "Open" | "Closed" | "Archived" => {
-    if (!status) return "Open" // Default to Open if status is undefined/null
+    if (!status) return "Open"
     const s = status.toLowerCase()
     if (s.includes("open") || s.includes("posted") || s.includes("active") || s.includes("submission")) return "Open"
     if (s.includes("forecast") || s.includes("forthcoming")) return "Forecasted"
     if (s.includes("closed") || s.includes("expired")) return "Closed"
     if (s.includes("archived")) return "Archived"
     return "Open"
+  }
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#1e3a5f] to-[#2d4a6f] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-white animate-spin" />
+      </div>
+    )
+  }
+
+  if (!currentUser) {
+    return <LoginScreen onAuthSuccess={handleAuthSuccess} />
   }
 
   return (
@@ -326,35 +332,21 @@ export default function GrantsSearchPage() {
               <p className="text-sm text-blue-200">DISCOVER. APPLY. SUCCEED.</p>
             </div>
             <div className="flex items-center gap-3">
-              {currentUser ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowAlertsPanel(!showAlertsPanel)}
-                    className="text-white hover:bg-white/10"
-                  >
-                    <Bell className="h-4 w-4 mr-2" />
-                    Alerts ({currentUser.alerts.length})
-                  </Button>
-                  <span className="text-sm text-blue-200">
-                    {currentUser.name} ({currentUser.businessUnit || "N/A"})
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-white/10">
-                    <LogOut className="h-4 w-4" />
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIsAuthModalOpen(true)}
-                  className="bg-white text-[#1e3a5f] hover:bg-gray-100"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Sign In
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAlertsPanel(!showAlertsPanel)}
+                className="text-white hover:bg-white/10"
+              >
+                <Bell className="h-4 w-4 mr-2" />
+                Alertas ({currentUser?.alerts?.length || 0})
+              </Button>
+              <span className="text-sm text-blue-200">
+                {currentUser.name} ({currentUser.businessUnit})
+              </span>
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-white/10">
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -384,7 +376,7 @@ export default function GrantsSearchPage() {
       </div>
 
       <div className="container mx-auto px-4 py-6">
-        {currentUser && showAlertsPanel && (
+        {showAlertsPanel && (
           <Card className="mb-6 border-[#1e3a5f] border-2">
             <CardContent className="py-4">
               <AlertsPanel
@@ -477,8 +469,6 @@ export default function GrantsSearchPage() {
                         { key: "cybersecurity", label: "Cybersecurity" },
                         { key: "ai", label: "Artificial Intelligence" },
                         { key: "space", label: "Space" },
-                        { key: "biotech", label: "Biotech & Life Sciences" },
-                        { key: "nasa", label: "NASA Technology" },
                       ].map(({ key, label }) => (
                         <div key={key} className="flex items-center space-x-2">
                           <Checkbox
@@ -494,8 +484,6 @@ export default function GrantsSearchPage() {
                                   cybersecurity: false,
                                   ai: false,
                                   space: false,
-                                  biotech: false,
-                                  nasa: false,
                                 })
                               } else {
                                 setCategoryFilters((prev) => ({
@@ -516,19 +504,19 @@ export default function GrantsSearchPage() {
 
                   {/* Funding Instrument Filter */}
                   <div className="mb-6">
-                    <h3 className="font-medium text-sm mb-2 text-gray-700">Funding Instrument</h3>
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Type of Action</h3>
                     <div className="space-y-2">
                       {[
                         { key: "all", label: "All Types" },
-                        { key: "researchInnovation", label: "Research & Innovation (RIA)" },
-                        { key: "innovation", label: "Innovation Action (IA)" },
-                        { key: "coordination", label: "Coordination & Support (CSA)" },
+                        { key: "researchInnovation", label: "RIA (Research & Innovation)" },
+                        { key: "innovation", label: "IA (Innovation Action)" },
+                        { key: "coordination", label: "CSA (Coordination & Support)" },
                         { key: "cascade", label: "Cascade Funding" },
                         { key: "simpleGrants", label: "Simple Grants" },
                       ].map(({ key, label }) => (
                         <div key={key} className="flex items-center space-x-2">
                           <Checkbox
-                            id={`instrument-${key}`}
+                            id={`funding-${key}`}
                             checked={fundingInstruments[key as keyof typeof fundingInstruments]}
                             onCheckedChange={(checked) => {
                               if (key === "all") {
@@ -549,7 +537,7 @@ export default function GrantsSearchPage() {
                               }
                             }}
                           />
-                          <Label htmlFor={`instrument-${key}`} className="text-sm cursor-pointer">
+                          <Label htmlFor={`funding-${key}`} className="text-sm cursor-pointer">
                             {label}
                           </Label>
                         </div>
@@ -557,7 +545,7 @@ export default function GrantsSearchPage() {
                     </div>
                   </div>
 
-                  {/* Program Filter */}
+                  {/* Programme Filter */}
                   <div className="mb-6">
                     <h3 className="font-medium text-sm mb-2 text-gray-700">Programme</h3>
                     <div className="space-y-2">
@@ -573,7 +561,12 @@ export default function GrantsSearchPage() {
                             checked={agencyFilters[key as keyof typeof agencyFilters]}
                             onCheckedChange={(checked) => {
                               if (key === "all") {
-                                setAgencyFilters({ all: true, horizon: false, digital: false, cerv: false })
+                                setAgencyFilters({
+                                  all: true,
+                                  horizon: false,
+                                  digital: false,
+                                  cerv: false,
+                                })
                               } else {
                                 setAgencyFilters((prev) => ({
                                   ...prev,
@@ -596,45 +589,22 @@ export default function GrantsSearchPage() {
 
             {/* Main Content */}
             <div className="lg:col-span-3">
-              {/* Search Form */}
+              {/* Search Bar */}
               <Card className="mb-6 border-[#d1d5db]">
                 <CardContent className="p-4">
-                  <form onSubmit={handleSearch}>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                      <div>
-                        <Label htmlFor="keyword" className="text-sm font-medium text-gray-700">
-                          Keyword Search
-                        </Label>
-                        <div className="relative mt-1">
-                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                          <Input
-                            id="keyword"
-                            placeholder="Search by keyword..."
-                            value={keyword}
-                            onChange={(e) => setKeyword(e.target.value)}
-                            className="pl-10"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label htmlFor="opportunityNumber" className="text-sm font-medium text-gray-700">
-                          Opportunity Number
-                        </Label>
-                        <Input
-                          id="opportunityNumber"
-                          placeholder="e.g., HORIZON-CL4-2025"
-                          value={opportunityNumber}
-                          onChange={(e) => setOpportunityNumber(e.target.value)}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <Button type="submit" className="w-full bg-[#1e3a5f] hover:bg-[#2d4a6f]">
-                          <Search className="h-4 w-4 mr-2" />
-                          Search
-                        </Button>
-                      </div>
+                  <form onSubmit={handleSearch} className="flex gap-4">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Search by keyword, opportunity number, or agency..."
+                        value={keyword}
+                        onChange={(e) => setKeyword(e.target.value)}
+                        className="pl-10"
+                      />
                     </div>
+                    <Button type="submit" className="bg-[#1e3a5f] hover:bg-[#2d4a6f]">
+                      Search
+                    </Button>
                   </form>
                 </CardContent>
               </Card>
@@ -642,15 +612,15 @@ export default function GrantsSearchPage() {
               {/* Results */}
               <Card className="border-[#d1d5db]">
                 <CardContent className="p-0">
-                  <div className="p-4 border-b bg-gray-50">
+                  <div className="p-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex justify-between items-center">
-                      <p className="text-sm text-gray-600">
-                        Showing <span className="font-semibold">{filteredGrants.length}</span> grants
-                      </p>
+                      <h2 className="font-semibold text-[#1e3a5f]">
+                        {isLoading ? "Loading..." : `${filteredGrants.length} Opportunities Found`}
+                      </h2>
                       <select
+                        className="text-sm border rounded px-2 py-1"
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
-                        className="text-sm border rounded px-2 py-1"
                       >
                         <option value="posted-desc">Posted Date (Newest)</option>
                         <option value="posted-asc">Posted Date (Oldest)</option>
@@ -661,14 +631,9 @@ export default function GrantsSearchPage() {
                   </div>
 
                   {isLoading ? (
-                    <div className="flex items-center justify-center py-20">
+                    <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-[#1e3a5f]" />
-                      <span className="ml-3 text-gray-600">Loading grants...</span>
-                    </div>
-                  ) : filteredGrants.length === 0 ? (
-                    <div className="text-center py-20 text-gray-500">
-                      <p className="text-lg mb-2">No grants found</p>
-                      <p className="text-sm">Try adjusting your filters or search criteria</p>
+                      <span className="ml-2 text-gray-600">Loading grants...</span>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -684,92 +649,85 @@ export default function GrantsSearchPage() {
                             <th className="text-left p-3">Source</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y">
-                          {paginatedGrants.map((grant, index) => (
-                            <tr key={grant.id || index} className="hover:bg-gray-50">
-                              <td className="p-3 text-sm font-mono text-[#1e3a5f] align-top">
-                                <a
-                                  href={grant.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="hover:underline"
-                                >
-                                  {grant.opportunityNumber}
-                                </a>
-                              </td>
-                              <td className="p-3 align-top max-w-md">
-                                <a
-                                  href={grant.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm font-medium text-[#1e3a5f] hover:underline block"
-                                >
-                                  {grant.title}
-                                </a>
-                                {grant.description && (
-                                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{grant.description}</p>
-                                )}
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {grant.category && (
-                                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                                      {grant.category}
-                                    </Badge>
-                                  )}
-                                  {grant.fundingInstrument && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {grant.fundingInstrument}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="p-3 text-sm text-gray-700 align-top">{grant.agency}</td>
-                              <td className="p-3 align-top">
-                                <Badge
-                                  className={
-                                    mapStatus(grant.status) === "Open"
-                                      ? "bg-green-600"
-                                      : mapStatus(grant.status) === "Forecasted"
-                                        ? "bg-blue-600"
-                                        : mapStatus(grant.status) === "Closed"
-                                          ? "bg-red-600"
-                                          : "bg-gray-600"
-                                  }
-                                >
-                                  {mapStatus(grant.status)}
-                                </Badge>
-                              </td>
-                              <td className="p-3 text-sm text-gray-600 align-top">
-                                {grant.postedDate
-                                  ? new Date(grant.postedDate).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })
-                                  : "-"}
-                              </td>
-                              <td className="p-3 text-sm text-gray-600 align-top">
-                                {grant.closeDate
-                                  ? new Date(grant.closeDate).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })
-                                  : "-"}
-                              </td>
-                              <td className="p-3 align-top">
-                                <Badge
-                                  variant="outline"
-                                  className={
-                                    grant.source === "usa"
-                                      ? "border-blue-500 text-blue-600"
-                                      : "border-yellow-500 text-yellow-700"
-                                  }
-                                >
-                                  {grant.source === "usa" ? "USA" : "EU"}
-                                </Badge>
+                        <tbody className="divide-y divide-gray-200">
+                          {paginatedGrants.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="text-center py-8 text-gray-500">
+                                No grants found matching your criteria
                               </td>
                             </tr>
-                          ))}
+                          ) : (
+                            paginatedGrants.map((grant) => (
+                              <tr key={grant.id} className="hover:bg-gray-50">
+                                <td className="p-3 text-sm font-mono text-[#1e3a5f]">{grant.opportunityNumber}</td>
+                                <td className="p-3 align-top">
+                                  <a
+                                    href={grant.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[#1e3a5f] hover:underline font-medium text-sm block"
+                                  >
+                                    {grant.title}
+                                  </a>
+                                  {grant.description && (
+                                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{grant.description}</p>
+                                  )}
+                                  <div className="flex gap-1 mt-2 flex-wrap">
+                                    {grant.category && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs bg-purple-50 text-purple-700 border-purple-200"
+                                      >
+                                        {grant.category}
+                                      </Badge>
+                                    )}
+                                    {grant.fundingInstrument && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+                                      >
+                                        {grant.fundingInstrument}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-3 text-sm text-gray-600">{grant.agency}</td>
+                                <td className="p-3">
+                                  <Badge
+                                    className={
+                                      mapStatus(grant.status) === "Open"
+                                        ? "bg-green-100 text-green-800"
+                                        : mapStatus(grant.status) === "Forecasted"
+                                          ? "bg-blue-100 text-blue-800"
+                                          : mapStatus(grant.status) === "Closed"
+                                            ? "bg-red-100 text-red-800"
+                                            : "bg-gray-100 text-gray-800"
+                                    }
+                                  >
+                                    {mapStatus(grant.status)}
+                                  </Badge>
+                                </td>
+                                <td className="p-3 text-sm text-gray-600">
+                                  {new Date(grant.postedDate).toLocaleDateString()}
+                                </td>
+                                <td className="p-3 text-sm text-gray-600">
+                                  {grant.closeDate ? new Date(grant.closeDate).toLocaleDateString() : "N/A"}
+                                </td>
+                                <td className="p-3">
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      grant.source === "usa"
+                                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                                        : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                    }
+                                  >
+                                    {grant.source === "usa" ? "USA" : "EU"}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -777,26 +735,32 @@ export default function GrantsSearchPage() {
 
                   {/* Pagination */}
                   {totalPages > 1 && (
-                    <div className="p-4 border-t flex justify-between items-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                      >
-                        Previous
-                      </Button>
+                    <div className="p-4 border-t border-gray-200 flex justify-between items-center">
                       <span className="text-sm text-gray-600">
-                        Page {currentPage} of {totalPages}
+                        Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredGrants.length)} of{" "}
+                        {filteredGrants.length}
                       </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                      >
-                        Next
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          Previous
+                        </Button>
+                        <span className="flex items-center px-3 text-sm">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          Next
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -807,15 +771,20 @@ export default function GrantsSearchPage() {
       </div>
 
       {/* Footer */}
-      <footer className="bg-[#1e3a5f] text-white py-6 mt-10">
-        <div className="container mx-auto px-4 text-center text-sm">
-          <p>Arquimea Grants Search - Data from Grants.gov & EU Funding & Tenders Portal</p>
-          <p className="text-blue-200 mt-1">Part of Arquimea Group</p>
+      <footer className="bg-[#1e3a5f] text-white py-6 mt-8">
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-sm text-blue-200">
+            &copy; 2025 Arquimea Group. Data sourced from{" "}
+            <a href="https://www.grants.gov" className="underline hover:text-white">
+              Grants.gov
+            </a>{" "}
+            and{" "}
+            <a href="https://ec.europa.eu/info/funding-tenders" className="underline hover:text-white">
+              EU Funding & Tenders Portal
+            </a>
+          </p>
         </div>
       </footer>
-
-      {/* Auth Modal */}
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} onAuthSuccess={setCurrentUser} />
     </div>
   )
 }

@@ -1,0 +1,78 @@
+import Link from "next/link"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+
+export default function SupportPage() {
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+              <div className="w-12 h-12 bg-primary rounded flex items-center justify-center">
+                <svg className="w-8 h-8 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">ARQUIMEA GRANTS SEARCH</h1>
+                <p className="text-sm text-muted-foreground">DISCOVER. APPLY. SUCCEED.</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="max-w-7xl mx-auto px-4 py-12">
+        <h1 className="text-4xl font-bold text-foreground mb-8">Help & Support</h1>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Frequently Asked Questions</CardTitle>
+              <CardDescription>Quick answers to common questions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+                <li>How do I register for an account?</li>
+                <li>What are the eligibility requirements?</li>
+                <li>How do I track my application?</li>
+                <li>What documents do I need to apply?</li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact Support</CardTitle>
+              <CardDescription>Get help from our team</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">Need assistance? Our support team is here to help.</p>
+              <p className="text-muted-foreground">
+                Email: support@arquimea-grants.com
+                <br />
+                Phone: 1-800-GRANTS-4U
+                <br />
+                Hours: Monday-Friday, 9 AM - 5 PM EST
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Video Tutorials</CardTitle>
+              <CardDescription>Learn how to use the platform</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Watch step-by-step video guides on searching, applying, and managing grants.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    </div>
+  )
+}

@@ -90,6 +90,7 @@ export default function GrantsSearchPage() {
     cybersecurity: false,
     ai: false,
     space: false,
+    defense: false,
   })
 
   const [agencyFilters, setAgencyFilters] = useState({
@@ -197,6 +198,7 @@ export default function GrantsSearchPage() {
       filtered = filtered.filter((g) => {
         const titleLower = g.title.toLowerCase()
         const idLower = g.opportunityNumber.toLowerCase()
+        const agencyLower = (g.agency || "").toLowerCase()
 
         if (categoryFilters.horizonEurope && (titleLower.includes("horizon") || idLower.includes("horizon")))
           return true
@@ -209,6 +211,11 @@ export default function GrantsSearchPage() {
         if (
           categoryFilters.space &&
           (titleLower.includes("space") || titleLower.includes("satellite") || titleLower.includes("gravimetry"))
+        )
+          return true
+        if (
+          categoryFilters.defense &&
+          (titleLower.includes("defense") || titleLower.includes("darpa") || titleLower.includes("c5isr") || titleLower.includes("cmoss") || titleLower.includes("cmff") || titleLower.includes("missile") || titleLower.includes("devcom") || agencyLower.includes("defense") || agencyLower.includes("darpa"))
         )
           return true
 
@@ -255,6 +262,7 @@ export default function GrantsSearchPage() {
     if (categoryFilters.cybersecurity) categories.push("cybersecurity")
     if (categoryFilters.ai) categories.push("ai")
     if (categoryFilters.space) categories.push("space")
+    if (categoryFilters.defense) categories.push("defense")
 
     const statuses: string[] = []
     if (statusFilters.forecasted) statuses.push("forecasted")
@@ -466,6 +474,7 @@ export default function GrantsSearchPage() {
                         { key: "cybersecurity", label: "Cybersecurity" },
                         { key: "ai", label: "Artificial Intelligence" },
                         { key: "space", label: "Space" },
+                        { key: "defense", label: "Defense" },
                       ].map(({ key, label }) => (
                         <div key={key} className="flex items-center space-x-2">
                           <Checkbox
@@ -480,6 +489,7 @@ export default function GrantsSearchPage() {
                                   cybersecurity: false,
                                   ai: false,
                                   space: false,
+                                  defense: false,
                                 })
                               } else {
                                 setCategoryFilters((prev) => ({

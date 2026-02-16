@@ -43,16 +43,7 @@ export class EUFundingFetcher {
 
   private getVerifiedEUGrants(): EUGrant[] {
     const euOpportunities = [
-      // Horizon Europe - WIDERA
-      {
-        id: "HORIZON-WIDERA-2026-03-WIDENING-01",
-        title: "Hop-On Facility",
-        programme: "Horizon Europe (HORIZON)",
-        type: "HORIZON Research and Innovation Actions",
-        openDate: "2026-01-13",
-        deadline: "2026-09-24",
-        status: "Open For Submission",
-      },
+      // Horizon Europe - WIDERA (verified dates from official portal)
       {
         id: "HORIZON-WIDERA-2026-02-WIDENING-01",
         title: "Twinning",
@@ -62,37 +53,27 @@ export class EUFundingFetcher {
         deadline: "2026-04-09",
         status: "Open For Submission",
       },
-      // Digital Europe Programme
+      // Digital Europe Programme - Cascade funding (verified)
       {
         id: "NCCEE2",
-        title:
-          "Innovation Funding for Estonian Cybersecurity Companies for developing innovative, high value-added products and services",
+        title: "Innovation Funding for Estonian Cybersecurity Companies for developing innovative, high value-added products and services",
         programme: "Digital Europe Programme (DIGITAL)",
         type: "Cascade funding",
         openDate: "2026-01-12",
         deadline: "2026-12-02",
         status: "Open For Submission",
       },
-      {
-        id: "GreenChips-EDU",
-        title: "IST GreenChips-EDU Research Studentships",
-        programme: "Digital Europe Programme (DIGITAL)",
-        type: "Cascade funding",
-        openDate: "2026-01-01",
-        deadline: "2026-02-28",
-        status: "Open For Submission",
-      },
-      // Horizon Europe - EIC
+      // Horizon Europe - EIC (verified)
       {
         id: "HORIZON-EIC-2026-BAS-01-ECOSYSTEM",
-        title: "HORIZON-EIC-2026-BAS-01-ECOSYSTEM",
+        title: "EIC Innovation Ecosystem Support",
         programme: "Horizon Europe (HORIZON)",
         type: "HORIZON Coordination and Support Actions",
         openDate: "2026-01-08",
         deadline: "2026-03-26",
         status: "Open For Submission",
       },
-      // RAISE - AI in Science
+      // RAISE - AI in Science (verified)
       {
         id: "HORIZON-RAISE-2026-01-01",
         title: "Thematic Networks of Excellence for AI in Science (RAISE pilot) (RIA)",
@@ -102,35 +83,27 @@ export class EUFundingFetcher {
         deadline: "2026-04-21",
         status: "Open For Submission",
       },
-      // Cascade funding - Horizon Europe
+      // Digital Europe - EDIH (verified from HaDEA)
       {
-        id: "DIGI-EDIH-SEAL-01-CONSOLIDATION",
-        title: "Consolidation of the European Digital Innovation Hubs network",
+        id: "DIGITAL-2026-EDIH-AC-09",
+        title: "European Digital Innovation Hubs - Additional activities",
         programme: "Digital Europe Programme (DIGITAL)",
         type: "DIGITAL Simple Grants",
         openDate: "2025-12-18",
-        deadline: "2026-03-20",
+        deadline: "2026-03-03",
         status: "Open For Submission",
       },
-      {
-        id: "DIGI-EDIH-SEAL-02-COMPLETION",
-        title: "Completion of the European Digital Innovation Hubs network",
-        programme: "Digital Europe Programme (DIGITAL)",
-        type: "DIGITAL Simple Grants",
-        openDate: "2025-12-18",
-        deadline: "2026-03-20",
-        status: "Open For Submission",
-      },
-      // Space and Cybersecurity
+      // Horizon Europe - Digital, Industry and Space (verified deadline: 8 April 2026)
       {
         id: "HORIZON-CL4-2026-04-DATA-02",
         title: "Open Internet Stack Sovereign Solutions (RIA)",
         programme: "Horizon Europe (HORIZON)",
         type: "HORIZON Research and Innovation Actions",
-        openDate: "2026-01-15",
-        deadline: "2026-04-15",
+        openDate: "2026-01-14",
+        deadline: "2026-04-08",
         status: "Open For Submission",
       },
+      // Digital Europe - Cybersecurity (verified from official portal)
       {
         id: "DIGITAL-ECCC-2025-DEPLOY-CYBER-07-HUBNATIONAL",
         title: "National Cyber Hubs",
@@ -158,14 +131,14 @@ export class EUFundingFetcher {
         deadline: "2026-03-27",
         status: "Open For Submission",
       },
-      // Space grants
+      // Space grants (verified deadline: 8 April 2026 from Horizon CL4 2026 work programme)
       {
         id: "HORIZON-CL4-2026-SPACE-01-21",
         title: "Quantum Space Gravimetry",
         programme: "Horizon Europe (HORIZON)",
         type: "HORIZON Research and Innovation Actions",
-        openDate: "2026-01-15",
-        deadline: "2026-04-15",
+        openDate: "2026-01-14",
+        deadline: "2026-04-08",
         status: "Open For Submission",
       },
       {
@@ -173,8 +146,8 @@ export class EUFundingFetcher {
         title: "Space critical equipment and technologies - Space Surveillance and Tracking",
         programme: "Horizon Europe (HORIZON)",
         type: "HORIZON Research and Innovation Actions",
-        openDate: "2026-01-15",
-        deadline: "2026-04-15",
+        openDate: "2026-01-14",
+        deadline: "2026-04-08",
         status: "Open For Submission",
       },
       {
@@ -182,8 +155,8 @@ export class EUFundingFetcher {
         title: "Earth Observation for Biodiversity and Agriculture",
         programme: "Horizon Europe (HORIZON)",
         type: "HORIZON Research and Innovation Actions",
-        openDate: "2026-01-15",
-        deadline: "2026-04-15",
+        openDate: "2026-01-14",
+        deadline: "2026-04-08",
         status: "Open For Submission",
       },
       {
@@ -191,46 +164,8 @@ export class EUFundingFetcher {
         title: "Advanced satellite telecommunications systems",
         programme: "Horizon Europe (HORIZON)",
         type: "HORIZON Innovation Actions",
-        openDate: "2026-01-15",
+        openDate: "2026-01-14",
         deadline: "2026-10-21",
-        status: "Open For Submission",
-      },
-      {
-        id: "EUSPA-2025-GALILEO-01",
-        title: "Galileo downstream applications",
-        programme: "EU Space Programme",
-        type: "EU Space Innovation Actions",
-        openDate: "2025-12-10",
-        deadline: "2026-04-10",
-        status: "Open For Submission",
-      },
-      // Cybersecurity
-      {
-        id: "HORIZON-CL3-2026-CS-01-01",
-        title: "Advanced cryptographic solutions for secure communications",
-        programme: "Horizon Europe (HORIZON)",
-        type: "HORIZON Research and Innovation Actions",
-        openDate: "2026-01-15",
-        deadline: "2026-04-15",
-        status: "Open For Submission",
-      },
-      {
-        id: "HORIZON-CL3-2026-CS-01-02",
-        title: "AI-based cybersecurity threat detection and response",
-        programme: "Horizon Europe (HORIZON)",
-        type: "HORIZON Research and Innovation Actions",
-        openDate: "2026-01-15",
-        deadline: "2026-04-15",
-        status: "Open For Submission",
-      },
-      // Civil Drones - Space & Defense
-      {
-        id: "HORIZON-CL4-2026-SPACE-DRONE-01",
-        title: "Civil Drones Innovative Programme - Advanced Navigation and Control",
-        programme: "Horizon Europe (HORIZON)",
-        type: "HORIZON Innovation Actions",
-        openDate: "2026-01-20",
-        deadline: "2026-05-15",
         status: "Open For Submission",
       },
     ]

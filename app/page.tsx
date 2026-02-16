@@ -87,7 +87,6 @@ export default function GrantsSearchPage() {
     all: true,
     horizonEurope: false,
     digitalEurope: false,
-    cerv: false,
     cybersecurity: false,
     ai: false,
     space: false,
@@ -97,7 +96,6 @@ export default function GrantsSearchPage() {
     all: true,
     horizon: false,
     digital: false,
-    cerv: false,
   })
 
   useEffect(() => {
@@ -204,7 +202,7 @@ export default function GrantsSearchPage() {
           return true
         if (categoryFilters.digitalEurope && (titleLower.includes("digital") || idLower.includes("digital")))
           return true
-        if (categoryFilters.cerv && (titleLower.includes("cerv") || idLower.includes("cerv"))) return true
+  
         if (categoryFilters.cybersecurity && titleLower.includes("cyber")) return true
         if (categoryFilters.ai && (titleLower.includes("artificial intelligence") || titleLower.includes(" ai ")))
           return true
@@ -253,7 +251,7 @@ export default function GrantsSearchPage() {
     if (categoryFilters.all) categories.push("all")
     if (categoryFilters.horizonEurope) categories.push("horizonEurope")
     if (categoryFilters.digitalEurope) categories.push("digitalEurope")
-    if (categoryFilters.cerv) categories.push("cerv")
+
     if (categoryFilters.cybersecurity) categories.push("cybersecurity")
     if (categoryFilters.ai) categories.push("ai")
     if (categoryFilters.space) categories.push("space")
@@ -465,7 +463,6 @@ export default function GrantsSearchPage() {
                         { key: "all", label: "All Categories" },
                         { key: "horizonEurope", label: "Horizon Europe" },
                         { key: "digitalEurope", label: "Digital Europe" },
-                        { key: "cerv", label: "CERV" },
                         { key: "cybersecurity", label: "Cybersecurity" },
                         { key: "ai", label: "Artificial Intelligence" },
                         { key: "space", label: "Space" },
@@ -480,7 +477,6 @@ export default function GrantsSearchPage() {
                                   all: true,
                                   horizonEurope: false,
                                   digitalEurope: false,
-                                  cerv: false,
                                   cybersecurity: false,
                                   ai: false,
                                   space: false,
@@ -553,7 +549,6 @@ export default function GrantsSearchPage() {
                         { key: "all", label: "All Programmes" },
                         { key: "horizon", label: "Horizon Europe" },
                         { key: "digital", label: "Digital Europe" },
-                        { key: "cerv", label: "CERV" },
                       ].map(({ key, label }) => (
                         <div key={key} className="flex items-center space-x-2">
                           <Checkbox
@@ -565,7 +560,6 @@ export default function GrantsSearchPage() {
                                   all: true,
                                   horizon: false,
                                   digital: false,
-                                  cerv: false,
                                 })
                               } else {
                                 setAgencyFilters((prev) => ({

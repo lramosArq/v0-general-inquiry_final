@@ -5,6 +5,22 @@ import { EUFundingFetcher } from "@/lib/eu-funding-fetcher"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+// Grants to exclude (not relevant)
+const BLOCKED_GRANT_IDS = [
+  "VA-NCA-VCGP-2026",
+]
+const BLOCKED_KEYWORDS = [
+  "veterans cemetery",
+]
+
+function isBlockedGrant(grant: any): boolean {
+  const id = (grant.id || "").toLowerCase()
+  const title = (grant.title || "").toLowerCase()
+  if (BLOCKED_GRANT_IDS.some((b) => id.includes(b.toLowerCase()))) return true
+  if (BLOCKED_KEYWORDS.some((b) => title.includes(b.toLowerCase()))) return true
+  return false
+}
+
 function mapGrantToFrontend(grant: any, source: "usa" | "eu") {
   return {
     id: grant.id,
@@ -36,9 +52,10 @@ export async function POST(request: NextRequest) {
       try {
         const usaFetcher = new GrantsGovFetcher()
         const usaGrants = await usaFetcher.fetchAllGrants(keyword)
-        const mappedUsaGrants = usaGrants.map((g) => mapGrantToFrontend(g, "usa"))
+        const filteredUsa = usaGrants.filter((g) => !isBlockedGrant(g))
+        const mappedUsaGrants = filteredUsa.map((g) => mapGrantToFrontend(g, "usa"))
         allGrants.push(...mappedUsaGrants)
-        console.log(`[v0] USA grants fetched: ${usaGrants.length}`)
+        console.log(`[v0] USA grants fetched: ${filteredUsa.length}`)
       } catch (error) {
         console.error("[v0] Error fetching USA grants:", error)
       }
@@ -48,9 +65,10 @@ export async function POST(request: NextRequest) {
       try {
         const euFetcher = new EUFundingFetcher()
         const euGrants = await euFetcher.fetchAllGrants(keyword)
-        const mappedEuGrants = euGrants.map((g) => mapGrantToFrontend(g, "eu"))
+        const filteredEu = euGrants.filter((g) => !isBlockedGrant(g))
+        const mappedEuGrants = filteredEu.map((g) => mapGrantToFrontend(g, "eu"))
         allGrants.push(...mappedEuGrants)
-        console.log(`[v0] EU grants fetched: ${euGrants.length}`)
+        console.log(`[v0] EU grants fetched: ${filteredEu.length}`)
       } catch (error) {
         console.error("[v0] Error fetching EU grants:", error)
       }
@@ -96,7 +114,8 @@ export async function GET() {
     try {
       const usaFetcher = new GrantsGovFetcher()
       const usaGrants = await usaFetcher.fetchAllGrants()
-      const mappedUsaGrants = usaGrants.map((g) => mapGrantToFrontend(g, "usa"))
+      const filteredUsa = usaGrants.filter((g) => !isBlockedGrant(g))
+      const mappedUsaGrants = filteredUsa.map((g) => mapGrantToFrontend(g, "usa"))
       allGrants.push(...mappedUsaGrants)
     } catch (error) {
       console.error("[v0] Error fetching USA grants:", error)
@@ -106,7 +125,8 @@ export async function GET() {
     try {
       const euFetcher = new EUFundingFetcher()
       const euGrants = await euFetcher.fetchAllGrants()
-      const mappedEuGrants = euGrants.map((g) => mapGrantToFrontend(g, "eu"))
+      const filteredEu = euGrants.filter((g) => !isBlockedGrant(g))
+      const mappedEuGrants = filteredEu.map((g) => mapGrantToFrontend(g, "eu"))
       allGrants.push(...mappedEuGrants)
     } catch (error) {
       console.error("[v0] Error fetching EU grants:", error)

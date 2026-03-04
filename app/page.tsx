@@ -10,9 +10,11 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2 } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot } from "lucide-react"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
+import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
+import { GPTSyncPanel } from "@/components/gpt-sync-panel"
 import { LoginScreen } from "@/components/login-screen"
 import { UserService, type User as UserType } from "@/lib/user-service"
 
@@ -44,6 +46,7 @@ export default function GrantsSearchPage() {
   const [currentUser, setCurrentUser] = useState<UserType | null>(null)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [showAlertsPanel, setShowAlertsPanel] = useState(false)
+  const [apiConfig, setApiConfig] = useState<APIConfig | null>(null)
 
   // Search filters
   const [keyword, setKeyword] = useState("")
@@ -124,12 +127,24 @@ export default function GrantsSearchPage() {
     setIsLoading(true)
     try {
       console.log("[v0] Fetching grants...")
+      // Load saved blocklist config
+      let blocklist: { ids: string[]; keywords: string[] } | undefined
+      try {
+        const savedConfig = localStorage.getItem("apiConfig")
+        if (savedConfig) {
+          const parsed = JSON.parse(savedConfig)
+          blocklist = parsed.blocklist
+          if (!apiConfig) setApiConfig(parsed)
+        }
+      } catch { /* ignore */ }
+
       const response = await fetch("/api/grants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           keyword: "all",
           source: "all",
+          blocklist,
         }),
       })
 
@@ -376,6 +391,20 @@ export default function GrantsSearchPage() {
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Market Intelligence
               </TabsTrigger>
+              <TabsTrigger
+                value="connections"
+                className="text-white/70 data-[state=active]:text-white data-[state=active]:bg-white/10 rounded-none border-b-2 border-transparent data-[state=active]:border-white px-6 py-3"
+              >
+                <Plug className="h-4 w-4 mr-2" />
+                API Connections
+              </TabsTrigger>
+              <TabsTrigger
+                value="gpt-sync"
+                className="text-white/70 data-[state=active]:text-white data-[state=active]:bg-white/10 rounded-none border-b-2 border-transparent data-[state=active]:border-white px-6 py-3"
+              >
+                <Bot className="h-4 w-4 mr-2" />
+                GPT Sync
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -395,7 +424,14 @@ export default function GrantsSearchPage() {
           </Card>
         )}
 
-        {activeTab === "intelligence" ? (
+        {activeTab === "gpt-sync" ? (
+          <GPTSyncPanel />
+        ) : activeTab === "connections" ? (
+          <APIConnectionsPanel
+            onConfigSave={(config) => setApiConfig(config)}
+            onRefresh={fetchGrants}
+          />
+        ) : activeTab === "intelligence" ? (
           <MarketIntelligence grants={grants} />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

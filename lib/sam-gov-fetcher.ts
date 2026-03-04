@@ -36,9 +36,10 @@ export class SAMGovFetcher {
 
       const encodedApiKey = encodeURIComponent(this.apiKey)
       
-      const apiUrl = `https://api.sam.gov/opportunities/v2/search?api_key=${encodedApiKey}&limit=100&postedFrom=${postedFrom}&postedTo=${postedTo}&ptype=o,s,k,r,p`
+      const apiUrl = `https://api.sam.gov/prod/opportunities/v2/search?api_key=${encodedApiKey}&limit=100&postedFrom=${postedFrom}&postedTo=${postedTo}&ptype=o,s,k,r,p`
 
-      console.log(`[v0] 🔍 Consultando SAM.gov API: ${postedFrom} a ${postedTo}`)
+      console.log(`[v0] SAM.gov API URL: ${apiUrl.replace(encodedApiKey, "***")}`)
+      console.log(`[v0] Consultando SAM.gov API: ${postedFrom} a ${postedTo}`)
 
       const response = await fetch(apiUrl, {
         method: "GET",

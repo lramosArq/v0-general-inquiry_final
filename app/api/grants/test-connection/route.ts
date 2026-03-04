@@ -75,7 +75,7 @@ async function testSamConnection(config: any) {
       params.set("naics", config.naicsCodes.slice(0, 5).join(","))
     }
 
-    const apiUrl = `https://api.sam.gov/opportunities/v2/search?${params.toString()}`
+    const apiUrl = `https://api.sam.gov/prod/opportunities/v2/search?${params.toString()}`
     console.log("[v0] SAM.gov test URL:", apiUrl.replace(apiKey, "***"))
 
     const response = await fetch(apiUrl, {

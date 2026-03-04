@@ -182,7 +182,26 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
     const savedConfig = localStorage.getItem("apiConfig")
     if (savedConfig) {
       try {
-        setConfig(JSON.parse(savedConfig))
+        const parsed = JSON.parse(savedConfig)
+        // Deep merge with defaults to ensure new fields exist
+        setConfig({
+          sam: {
+            ...DEFAULT_CONFIG.sam,
+            ...parsed.sam,
+            noticeTypes: { ...DEFAULT_CONFIG.sam.noticeTypes, ...(parsed.sam?.noticeTypes || {}) },
+            additionalPortals: { ...DEFAULT_CONFIG.sam.additionalPortals, ...(parsed.sam?.additionalPortals || {}) },
+          },
+          eu: {
+            ...DEFAULT_CONFIG.eu,
+            ...parsed.eu,
+            programmes: { ...DEFAULT_CONFIG.eu.programmes, ...(parsed.eu?.programmes || {}) },
+            status: { ...DEFAULT_CONFIG.eu.status, ...(parsed.eu?.status || {}) },
+          },
+          blocklist: {
+            ...DEFAULT_CONFIG.blocklist,
+            ...parsed.blocklist,
+          },
+        })
       } catch {
         // use default
       }

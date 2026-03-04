@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { GrantsGovFetcher } from "@/lib/grants-gov-fetcher"
 import { EUFundingFetcher } from "@/lib/eu-funding-fetcher"
+import { SAMGovFetcher } from "@/lib/sam-gov-fetcher"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -53,15 +54,59 @@ export async function POST(request: NextRequest) {
     const allGrants: any[] = []
 
     if (!source || source === "all" || source === "usa") {
+      // Grants.gov (public, no key)
       try {
         const usaFetcher = new GrantsGovFetcher()
         const usaGrants = await usaFetcher.fetchAllGrants(keyword)
         const filteredUsa = usaGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
         const mappedUsaGrants = filteredUsa.map((g) => mapGrantToFrontend(g, "usa"))
         allGrants.push(...mappedUsaGrants)
-        console.log(`[v0] USA grants fetched: ${filteredUsa.length}`)
+        console.log(`[v0] Grants.gov fetched: ${filteredUsa.length}`)
       } catch (error) {
-        console.error("[v0] Error fetching USA grants:", error)
+        console.error("[v0] Error fetching Grants.gov:", error)
+      }
+
+      // SAM.gov (requires API key)
+      try {
+        const samApiKey = process.env.SAM_GOV_API_KEY
+        console.log("[v0] SAM_GOV_API_KEY present:", !!samApiKey, "length:", samApiKey?.length || 0)
+        if (samApiKey && samApiKey.trim().length > 0) {
+          const samFetcher = new SAMGovFetcher(samApiKey.trim())
+          const samTenders = await samFetcher.fetchDefenseTenders()
+          const samGrants = samTenders.map((t) => ({
+            id: t.id,
+            title: t.title,
+            organization: t.organization,
+            status: "Open",
+            publishDate: t.publishDate,
+            deadline: t.deadline,
+            description: t.description,
+            category: t.category,
+            amount: t.amount,
+            url: t.sourceUrl,
+            expedient: t.expedient,
+          }))
+          const filteredSam = samGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
+          const mappedSam = filteredSam.map((g) => mapGrantToFrontend(g, "usa"))
+          allGrants.push(...mappedSam)
+          console.log(`[v0] SAM.gov fetched: ${filteredSam.length}`)
+        } else {
+          console.log("[v0] SAM.gov API key empty or not configured, using fallback data")
+          const samFetcher = new SAMGovFetcher("")
+          const samTenders = await samFetcher.fetchDefenseTenders()
+          const samGrants = samTenders.map((t) => ({
+            id: t.id, title: t.title, organization: t.organization,
+            status: "Open", publishDate: t.publishDate, deadline: t.deadline,
+            description: t.description, category: t.category, amount: t.amount,
+            url: t.sourceUrl, expedient: t.expedient,
+          }))
+          const filteredSam = samGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
+          const mappedSam = filteredSam.map((g) => mapGrantToFrontend(g, "usa"))
+          allGrants.push(...mappedSam)
+          console.log(`[v0] SAM.gov fallback: ${filteredSam.length}`)
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching SAM.gov:", error)
       }
     }
 
@@ -114,7 +159,7 @@ export async function GET() {
 
     const allGrants: any[] = []
 
-    // Fetch USA grants
+    // Fetch USA grants - Grants.gov
     try {
       const usaFetcher = new GrantsGovFetcher()
       const usaGrants = await usaFetcher.fetchAllGrants()
@@ -122,7 +167,25 @@ export async function GET() {
       const mappedUsaGrants = filteredUsa.map((g) => mapGrantToFrontend(g, "usa"))
       allGrants.push(...mappedUsaGrants)
     } catch (error) {
-      console.error("[v0] Error fetching USA grants:", error)
+      console.error("[v0] Error fetching Grants.gov:", error)
+    }
+
+    // Fetch USA grants - SAM.gov
+    try {
+      const samApiKey = process.env.SAM_GOV_API_KEY
+      const samFetcher = new SAMGovFetcher(samApiKey?.trim() || "")
+      const samTenders = await samFetcher.fetchDefenseTenders()
+      const samGrants = samTenders.map((t) => ({
+        id: t.id, title: t.title, organization: t.organization,
+        status: "Open", publishDate: t.publishDate, deadline: t.deadline,
+        description: t.description, category: t.category, amount: t.amount,
+        url: t.sourceUrl, expedient: t.expedient,
+      }))
+      const filteredSam = samGrants.filter((g) => !isBlockedGrant(g))
+      const mappedSam = filteredSam.map((g) => mapGrantToFrontend(g, "usa"))
+      allGrants.push(...mappedSam)
+    } catch (error) {
+      console.error("[v0] Error fetching SAM.gov:", error)
     }
 
     // Fetch EU grants

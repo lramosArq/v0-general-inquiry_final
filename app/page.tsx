@@ -425,7 +425,15 @@ export default function GrantsSearchPage() {
         )}
 
         {activeTab === "gpt-sync" ? (
-          <GPTSyncPanel />
+          <GPTSyncPanel
+            onGrantsFound={(newGrants) => {
+              setGrants((prev) => {
+                const existingIds = new Set(prev.map((g) => g.id))
+                const unique = newGrants.filter((g: any) => !existingIds.has(g.id))
+                return [...unique, ...prev]
+              })
+            }}
+          />
         ) : activeTab === "connections" ? (
           <APIConnectionsPanel
             onConfigSave={(config) => setApiConfig(config)}

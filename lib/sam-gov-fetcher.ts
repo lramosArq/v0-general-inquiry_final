@@ -22,40 +22,62 @@ export class SAMGovFetcher {
     console.log("[v0] 🇺🇸 Iniciando obtención de licitaciones de defensa desde SAM.gov...")
 
     try {
-      if (!this.apiKey || this.apiKey === "demo") {
-        console.log("[v0] ⚠️ SAM.gov API key no configurada, usando datos de fallback")
+      if (!this.apiKey || this.apiKey.trim().length === 0 || this.apiKey === "demo") {
+        console.log("[v0] SAM.gov API key not set or empty, using fallback tenders")
         return this.getFallbackTenders()
       }
 
       const today = new Date()
-      const sixMonthsAgo = new Date()
-      sixMonthsAgo.setMonth(today.getMonth() - 6)
-      
-      const postedFrom = sixMonthsAgo.toISOString().split('T')[0].replace(/-/g, '/')
-      const postedTo = today.toISOString().split('T')[0].replace(/-/g, '/')
+      const threeMonthsAgo = new Date()
+      threeMonthsAgo.setMonth(today.getMonth() - 3)
 
-      const encodedApiKey = encodeURIComponent(this.apiKey)
-      
-      const apiUrl = `https://api.sam.gov/opportunities/v2/search?api_key=${encodedApiKey}&limit=100&postedFrom=${postedFrom}&postedTo=${postedTo}&ptype=o,s,k,r,p`
-
-      console.log(`[v0] 🔍 Consultando SAM.gov API: ${postedFrom} a ${postedTo}`)
-
-      const response = await fetch(apiUrl, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "DefenseTendersApp/1.0",
-        },
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error(`[v0] ❌ SAM.gov API error: ${response.status}`, errorText)
-        throw new Error(`SAM.gov API error: ${response.status}`)
+      // Date format: MM/dd/yyyy as per SAM.gov official docs
+      const formatDate = (d: Date) => {
+        const mm = String(d.getMonth() + 1).padStart(2, "0")
+        const dd = String(d.getDate()).padStart(2, "0")
+        const yyyy = d.getFullYear()
+        return `${mm}/${dd}/${yyyy}`
       }
 
-      const data = await response.json()
-      console.log(`[v0] ✅ SAM.gov API respondió: ${data.totalRecords || 0} registros totales`)
+      const postedFrom = formatDate(threeMonthsAgo)
+      const postedTo = formatDate(today)
+      const encodedApiKey = encodeURIComponent(this.apiKey.trim())
+      
+      // Try both URL formats - official docs list both
+      const urls = [
+        `https://api.sam.gov/opportunities/v2/search?api_key=${encodedApiKey}&limit=100&postedFrom=${postedFrom}&postedTo=${postedTo}&ptype=o,p,k`,
+        `https://api.sam.gov/prod/opportunities/v2/search?api_key=${encodedApiKey}&limit=100&postedFrom=${postedFrom}&postedTo=${postedTo}&ptype=o,p,k`,
+      ]
+
+      let data: any = null
+      let lastErr = ""
+
+      for (const apiUrl of urls) {
+        console.log(`[v0] SAM.gov trying: ${apiUrl.replace(encodedApiKey, "***")}`)
+        try {
+          const response = await fetch(apiUrl, {
+            method: "GET",
+            headers: { Accept: "application/json" },
+          })
+          console.log(`[v0] SAM.gov response status: ${response.status}`)
+          if (response.ok) {
+            data = await response.json()
+            console.log(`[v0] SAM.gov responded: ${data.totalRecords || 0} total records`)
+            break
+          } else {
+            const errText = await response.text().catch(() => "")
+            lastErr = `Status ${response.status}: ${errText.slice(0, 200)}`
+            console.log(`[v0] SAM.gov error: ${lastErr}`)
+          }
+        } catch (fetchErr) {
+          lastErr = fetchErr instanceof Error ? fetchErr.message : "Network error"
+          console.log(`[v0] SAM.gov fetch error: ${lastErr}`)
+        }
+      }
+
+      if (!data) {
+        throw new Error(`SAM.gov API error: ${lastErr}`)
+      }
 
       const opportunities = data.opportunitiesData || []
       

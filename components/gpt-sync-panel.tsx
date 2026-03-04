@@ -111,211 +111,178 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     setSyncLogs((prev) => [{ timestamp: new Date(), action, status, details }, ...prev].slice(0, 100))
   }
 
-  const RELEVANCE_KEYWORDS = [
-    "uas", "uav", "drone", "loitering munition", "counter-uas", "c-uas",
-    "electronic warfare", "ew", "satellite", "space", "isr", "surveillance",
-    "sensors", "autonomous", "usv", "uuv", "naval", "defense", "dual-use",
-    "secure communications", "cybersecurity", "radar", "missile",
-    "small satellite", "smallsat", "payload", "manufacturing",
-  ]
+  // Extract search keywords from the user's custom prompt
+  const extractKeywords = (prompt: string): string[] => {
+    // Common filler/stop words to exclude
+    const stopWords = new Set([
+      "search", "for", "and", "the", "a", "an", "or", "in", "of", "to",
+      "with", "that", "are", "is", "on", "at", "by", "from", "grants",
+      "contracts", "relevant", "capabilities", "group", "technology",
+      "opportunities", "related",
+    ])
+    // Split on commas, slashes, "and", spaces
+    const raw = prompt
+      .replace(/[,/()]/g, " ")
+      .replace(/\band\b/gi, " ")
+      .split(/\s+/)
+      .map((w) => w.trim().toLowerCase())
+      .filter((w) => w.length > 2 && !stopWords.has(w))
 
-  const scoreRelevance = (title: string, description: string): { score: number; matched: string[] } => {
-    const text = `${title} ${description}`.toLowerCase()
-    const matched = RELEVANCE_KEYWORDS.filter((kw) => text.includes(kw))
-    const score = Math.min(99, 50 + matched.length * 8)
+    // Also extract multi-word terms from the prompt
+    const multiWordTerms: string[] = []
+    const multiWordPatterns = [
+      "electronic warfare", "dual-use", "dual use", "counter-uas", "c-uas",
+      "small satellite", "loitering munition", "secure communications",
+      "machine learning", "artificial intelligence",
+    ]
+    const lowerPrompt = prompt.toLowerCase()
+    for (const term of multiWordPatterns) {
+      if (lowerPrompt.includes(term)) {
+        multiWordTerms.push(term)
+      }
+    }
+
+    // Deduplicate
+    const all = [...new Set([...multiWordTerms, ...raw])]
+    return all.length > 0 ? all : ["defense", "space", "uas"]
+  }
+
+  const scoreRelevance = (
+    grant: { title: string; description?: string; category?: string; agency?: string },
+    keywords: string[],
+  ): { score: number; matched: string[] } => {
+    const text = `${grant.title} ${grant.description || ""} ${grant.category || ""} ${grant.agency || ""}`.toLowerCase()
+    const matched = keywords.filter((kw) => text.includes(kw.toLowerCase()))
+    // Base 40 + 10 per keyword match, max 99
+    const score = Math.min(99, 40 + matched.length * 10)
     return { score, matched }
   }
 
   const runSync = async () => {
     setIsSyncing(true)
     setSyncResults([])
-    addLog("Sync Started", "info", "Initiating GPT-assisted grant synchronization across all portals...")
+    setSyncLogs([])
+
+    const keywords = extractKeywords(customPrompt)
+    addLog("Sync Started", "info", `Scanning all portals with keywords: ${keywords.slice(0, 8).join(", ")}...`)
 
     const allResults: SyncResult[] = []
     const allRawGrants: any[] = []
 
-    // Step 1: SAM.gov scan
-    addLog("SAM.gov Scan", "info", "Querying SAM.gov API for defense/space opportunities...")
-    try {
-      const samRes = await fetch("/api/grants/test-connection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: "sam",
-          config: {
-            keywords: ["UAS", "UAV", "electronic warfare", "satellite", "defense"],
-            naicsCodes: ["541715", "334511", "336414"],
-            noticeTypes: { solicitation: true, sourcesSought: true, specialNotice: true, baa: true, presolicitation: true },
-            activeOnly: true,
-          },
-        }),
-      })
-      const samData = await samRes.json()
-      if (samData.success) {
-        addLog("SAM.gov Scan", "success", `SAM.gov connected: ${samData.count} opportunities found.`)
-        ;(samData.sample || []).forEach((title: string, i: number) => {
-          const { score, matched } = scoreRelevance(title, "")
-          if (score >= 58) {
-            const result: SyncResult = {
-              id: `SAM-${Date.now()}-${i}`,
-              title,
-              source: "SAM.gov",
-              relevanceScore: score,
-              matchedKeywords: matched.slice(0, 4),
-              url: "https://sam.gov/search/results?index=opp&sort=-modifiedDate&page=1",
-              deadline: "Open",
-              status: "new",
+    // Fetch from each source using the REAL grants API
+    const sources: Array<{ name: string; sourceFilter: string }> = [
+      { name: "USA (Grants.gov + SAM.gov)", sourceFilter: "usa" },
+      { name: "EU Funding & Tenders Portal", sourceFilter: "eu" },
+    ]
+
+    for (const src of sources) {
+      addLog(`${src.name} Scan`, "info", `Querying ${src.name}...`)
+      try {
+        const res = await fetch("/api/grants", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            keyword: keywords.slice(0, 3).join(" "),
+            source: src.sourceFilter,
+          }),
+        })
+        const data = await res.json()
+        if (data.success && data.data?.length > 0) {
+          addLog(
+            `${src.name} Scan`,
+            "success",
+            `${src.name}: ${data.data.length} opportunities retrieved from live APIs.`,
+          )
+
+          for (const grant of data.data) {
+            const { score, matched } = scoreRelevance(grant, keywords)
+            // Only include grants that match at least one keyword
+            if (matched.length > 0) {
+              const result: SyncResult = {
+                id: grant.id,
+                title: grant.title,
+                source: src.sourceFilter === "usa" ? (grant.agency?.includes("SAM") ? "SAM.gov" : "Grants.gov") : "EU Portal",
+                relevanceScore: score,
+                matchedKeywords: matched.slice(0, 5),
+                url: grant.url || "#",
+                deadline: grant.closeDate || "See portal",
+                status: "new",
+              }
+              allResults.push(result)
+              allRawGrants.push(grant)
             }
-            allResults.push(result)
-            allRawGrants.push({
-              id: result.id,
-              title,
-              agency: "SAM.gov",
-              status: "Open",
-              postedDate: new Date().toISOString().split("T")[0],
-              description: `SAM.gov opportunity. Keywords: ${matched.join(", ")}`,
-              category: "Federal Contract",
-              source: "usa",
-              url: result.url,
-            })
           }
-        })
-      } else {
-        addLog("SAM.gov Scan", "warning", `SAM.gov: ${samData.message}`)
+        } else {
+          addLog(
+            `${src.name} Scan`,
+            "warning",
+            `${src.name}: ${data.data?.length === 0 ? "No opportunities found matching keywords." : data.error || "Unknown issue."}`,
+          )
+        }
+      } catch (error) {
+        addLog(
+          `${src.name} Scan`,
+          "error",
+          `${src.name} connection failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        )
       }
-    } catch (error) {
-      addLog("SAM.gov Scan", "error", `SAM.gov connection failed: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
 
-    // Step 2: Grants.gov scan
-    addLog("Grants.gov Scan", "info", "Querying Grants.gov API for federal grants...")
-    try {
-      const grantsRes = await fetch("/api/grants/test-connection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: "grants-gov",
-          config: {
-            keywords: ["defense", "UAS", "space"],
-          },
-        }),
+    // Relevance ranking
+    if (allResults.length > 0) {
+      addLog("AI Analysis", "info", `Scoring ${allResults.length} opportunities against prompt: "${customPrompt.slice(0, 60)}..."`)
+      allResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+
+      // Mark top results as confirmed, rest as new
+      allResults.forEach((r, i) => {
+        r.status = i < 5 || r.relevanceScore >= 70 ? "confirmed" : "new"
       })
-      const grantsData = await grantsRes.json()
-      if (grantsData.success) {
-        addLog("Grants.gov Scan", "success", `Grants.gov connected: ${grantsData.count} grants found.`)
-        ;(grantsData.sample || []).forEach((title: string, i: number) => {
-          const { score, matched } = scoreRelevance(title, "")
-          if (score >= 58) {
-            const result: SyncResult = {
-              id: `GG-${Date.now()}-${i}`,
-              title,
-              source: "Grants.gov",
-              relevanceScore: score,
-              matchedKeywords: matched.slice(0, 4),
-              url: "https://www.grants.gov/search-results-detail/" + (Date.now() + i),
-              deadline: "See portal",
-              status: "new",
-            }
-            allResults.push(result)
-            allRawGrants.push({
-              id: result.id,
-              title,
-              agency: "Grants.gov",
-              status: "Open",
-              postedDate: new Date().toISOString().split("T")[0],
-              description: `Grants.gov opportunity. Keywords: ${matched.join(", ")}`,
-              category: "Federal Grant",
-              source: "usa",
-              url: result.url,
-            })
-          }
-        })
-      } else {
-        addLog("Grants.gov Scan", "warning", `Grants.gov: ${grantsData.message}`)
-      }
-    } catch (error) {
-      addLog("Grants.gov Scan", "error", `Grants.gov connection failed: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
-
-    // Step 3: EU Portal scan
-    addLog("EU Portal Scan", "info", "Querying EU Funding & Tenders Portal...")
-    try {
-      const euRes = await fetch("/api/grants/test-connection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: "eu",
-          config: {
-            keywords: ["UAS", "drone", "satellite", "defense", "space", "electronic warfare"],
-            programmes: { horizonEurope: true, digitalEurope: true, euSpace: true },
-            topicPrefixes: ["HORIZON-CL4-2026-SPACE", "HORIZON-CL3-2026", "EDF-2026"],
-          },
-        }),
-      })
-      const euData = await euRes.json()
-      if (euData.success) {
-        addLog("EU Portal Scan", "success", `EU Portal connected: ${euData.count} topics found.`)
-        ;(euData.sample || []).forEach((titleRaw: string, i: number) => {
-          const title = titleRaw.includes(":") ? titleRaw.split(":").slice(1).join(":").trim() : titleRaw
-          const { score, matched } = scoreRelevance(title, titleRaw)
-          const result: SyncResult = {
-            id: `EU-${Date.now()}-${i}`,
-            title: titleRaw,
-            source: "EU Portal",
-            relevanceScore: Math.max(score, 70),
-            matchedKeywords: matched.length > 0 ? matched.slice(0, 4) : ["EU programme"],
-            url: "https://ec.europa.eu/info/funding-tenders/opportunities/portal/",
-            deadline: "See portal",
-            status: "new",
-          }
-          allResults.push(result)
-          allRawGrants.push({
-            id: result.id,
-            title: titleRaw,
-            agency: "EU Funding Portal",
-            status: "Open",
-            postedDate: new Date().toISOString().split("T")[0],
-            description: `EU Funding opportunity. Keywords: ${matched.join(", ")}`,
-            category: "EU Grant",
-            source: "eu",
-            url: result.url,
-          })
-        })
-      } else {
-        addLog("EU Portal Scan", "warning", `EU Portal: ${euData.message}`)
-      }
-    } catch (error) {
-      addLog("EU Portal Scan", "error", `EU Portal connection failed: ${error instanceof Error ? error.message : "Unknown error"}`)
-    }
-
-    // Step 4: Relevance ranking
-    addLog("AI Analysis", "info", `Scoring ${allResults.length} opportunities against ARQUIMEA strategic profile...`)
-    allResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
-
-    // Mark top results as confirmed
-    allResults.forEach((r, i) => {
-      r.status = i < 3 ? "confirmed" : r.relevanceScore >= 80 ? "confirmed" : "new"
-    })
 
     setSyncResults(allResults)
 
     if (syncConfig.detectDuplicates) {
-      addLog("Duplicate Check", "info", "Checked for duplicates across all sources.")
+      // Deduplicate by title similarity
+      const seen = new Set<string>()
+      let dupes = 0
+      const deduped = allResults.filter((r) => {
+        const key = r.title.toLowerCase().slice(0, 50)
+        if (seen.has(key)) {
+          dupes++
+          return false
+        }
+        seen.add(key)
+        return true
+      })
+      if (dupes > 0) {
+        setSyncResults(deduped)
+        addLog("Duplicate Check", "info", `Removed ${dupes} duplicate entries.`)
+      } else {
+        addLog("Duplicate Check", "success", "No duplicates detected.")
+      }
     }
+
     if (syncConfig.categorizeAuto) {
-      addLog("Auto-Categorization", "success", "Opportunities categorized by ARQUIMEA business unit alignment.")
+      addLog("Auto-Categorization", "success", "Opportunities categorized by keyword relevance.")
     }
 
     // Push found grants to the main feed
     if (allRawGrants.length > 0 && onGrantsFound) {
       onGrantsFound(allRawGrants)
-      addLog("Feed Updated", "success", `Pushed ${allRawGrants.length} opportunities to the Search Grants feed.`)
+      addLog(
+        "Feed Updated",
+        "success",
+        `Pushed ${allRawGrants.length} real opportunities to the Search Grants feed.`,
+      )
     }
 
+    const sourceNames = [...new Set(allResults.map((r) => r.source))]
     addLog(
       "Sync Complete",
-      "success",
-      `Found ${allResults.length} relevant opportunities from ${new Set(allResults.map((r) => r.source)).size} sources. ${allResults.filter((r) => r.status === "new").length} new, ${allResults.filter((r) => r.status === "confirmed").length} confirmed.`
+      allResults.length > 0 ? "success" : "warning",
+      allResults.length > 0
+        ? `Found ${allResults.length} relevant opportunities from ${sourceNames.join(", ")}. ${allResults.filter((r) => r.status === "new").length} new, ${allResults.filter((r) => r.status === "confirmed").length} confirmed.`
+        : "No opportunities matched your search prompt. Try broadening your keywords.",
     )
 
     setLastSync(new Date())

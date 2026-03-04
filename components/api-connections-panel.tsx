@@ -168,8 +168,10 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
   const [config, setConfig] = useState<APIConfig>(DEFAULT_CONFIG)
   const [testingSam, setTestingSam] = useState(false)
   const [testingEu, setTestingEu] = useState(false)
+  const [testingGrantsGov, setTestingGrantsGov] = useState(false)
   const [samResult, setSamResult] = useState<TestResult | null>(null)
   const [euResult, setEuResult] = useState<TestResult | null>(null)
+  const [grantsGovResult, setGrantsGovResult] = useState<TestResult | null>(null)
   const [saved, setSaved] = useState(false)
   const [newBlockId, setNewBlockId] = useState("")
   const [newBlockKeyword, setNewBlockKeyword] = useState("")
@@ -263,6 +265,40 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
       })
     } finally {
       setTestingEu(false)
+    }
+  }
+
+  const handleTestGrantsGov = async () => {
+    setTestingGrantsGov(true)
+    setGrantsGovResult(null)
+    try {
+      const response = await fetch("/api/grants/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "grants-gov",
+          config: {
+            keywords: config.sam.keywords.slice(0, 3),
+          },
+        }),
+      })
+      const result = await response.json()
+      setGrantsGovResult({
+        source: "grants-gov",
+        success: result.success,
+        count: result.count || 0,
+        message: result.message || "",
+        sample: result.sample || [],
+      })
+    } catch (error) {
+      setGrantsGovResult({
+        source: "grants-gov",
+        success: false,
+        count: 0,
+        message: error instanceof Error ? error.message : "Connection failed",
+      })
+    } finally {
+      setTestingGrantsGov(false)
     }
   }
 
@@ -372,7 +408,7 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* SAM.gov Panel */}
         <Card className="border-[#1e3a5f]/30">
           <CardContent className="p-5">
@@ -577,6 +613,100 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
                     <div className="mt-2 space-y-1">
                       <p className="text-xs font-medium text-gray-500">Sample results:</p>
                       {samResult.sample.map((title, i) => (
+                        <p key={i} className="text-xs text-gray-600 truncate">
+                          {i + 1}. {title}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Grants.gov Panel */}
+        <Card className="border-[#1e3a5f]/30">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-green-700" />
+                <h3 className="font-semibold text-green-800 text-lg">Grants.gov API</h3>
+                <Badge variant="outline" className="text-xs border-green-300 text-green-700 bg-green-50">
+                  USA
+                </Badge>
+                <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-600 bg-emerald-50">
+                  No Key
+                </Badge>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+                <p className="text-xs text-green-800 font-medium mb-1">Public API - No authentication required</p>
+                <p className="text-xs text-green-600">
+                  Endpoint: api.grants.gov/v1/api/search2 (POST)
+                </p>
+                <p className="text-xs text-green-600 mt-1">
+                  Fetches federal grant opportunities. Uses the same keywords configured in SAM.gov panel for search consistency.
+                </p>
+              </div>
+
+              <div className="p-3 bg-gray-50 rounded-lg border">
+                <p className="text-xs font-medium text-gray-700 mb-1">Active search keywords (shared with SAM.gov):</p>
+                <div className="flex flex-wrap gap-1">
+                  {config.sam.keywords.slice(0, 8).map((kw) => (
+                    <Badge key={kw} variant="secondary" className="text-xs bg-green-50 text-green-700 border border-green-200">
+                      {kw}
+                    </Badge>
+                  ))}
+                  {config.sam.keywords.length > 8 && (
+                    <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-500">
+                      +{config.sam.keywords.length - 8} more
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Test Grants.gov Connection */}
+              <Button
+                onClick={handleTestGrantsGov}
+                disabled={testingGrantsGov}
+                className="w-full bg-green-700 hover:bg-green-800 text-white"
+              >
+                {testingGrantsGov ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Testing Connection...
+                  </>
+                ) : (
+                  <>
+                    <Database className="h-4 w-4 mr-2" /> Test Grants.gov Connection
+                  </>
+                )}
+              </Button>
+
+              {/* Test Result */}
+              {grantsGovResult && (
+                <div
+                  className={`p-3 rounded-lg border ${grantsGovResult.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {grantsGovResult.success ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-600" />
+                    )}
+                    <span className={`text-sm font-medium ${grantsGovResult.success ? "text-green-700" : "text-red-700"}`}>
+                      {grantsGovResult.success
+                        ? `${grantsGovResult.count} grants found`
+                        : "Connection failed"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600">{grantsGovResult.message}</p>
+                  {grantsGovResult.sample && grantsGovResult.sample.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs font-medium text-gray-500">Sample results:</p>
+                      {grantsGovResult.sample.map((title, i) => (
                         <p key={i} className="text-xs text-gray-600 truncate">
                           {i + 1}. {title}
                         </p>
@@ -885,9 +1015,11 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
       <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="text-sm text-gray-500">
           <span className="font-medium text-gray-700">Current config:</span>{" "}
-          SAM.gov {config.sam.enabled ? "ON" : "OFF"} ({config.sam.keywords.length} keywords, {config.sam.naicsCodes.length} NAICS, {Object.values(config.sam.additionalPortals).filter(Boolean).length} extra portals)
+          SAM.gov {config.sam.enabled ? "ON" : "OFF"} ({config.sam.keywords.length} kw, {config.sam.naicsCodes.length} NAICS)
           {" | "}
-          EU {config.eu.enabled ? "ON" : "OFF"} ({config.eu.keywords.length} keywords, {Object.values(config.eu.programmes).filter(Boolean).length} programmes, {config.eu.topicPrefixes.length} prefixes)
+          Grants.gov ON (public API)
+          {" | "}
+          EU {config.eu.enabled ? "ON" : "OFF"} ({config.eu.keywords.length} kw, {Object.values(config.eu.programmes).filter(Boolean).length} programmes)
           {" | "}
           Blocklist: {config.blocklist.ids.length + config.blocklist.keywords.length} rules
         </div>

@@ -31,12 +31,12 @@ export class SAMGovFetcher {
       const sixMonthsAgo = new Date()
       sixMonthsAgo.setMonth(today.getMonth() - 6)
       
-      const postedFrom = sixMonthsAgo.toISOString().split('T')[0]
-      const postedTo = today.toISOString().split('T')[0]
+      const postedFrom = sixMonthsAgo.toISOString().split('T')[0].replace(/-/g, '/')
+      const postedTo = today.toISOString().split('T')[0].replace(/-/g, '/')
 
       const encodedApiKey = encodeURIComponent(this.apiKey)
       
-      const apiUrl = `https://api.sam.gov/opportunities/v2/search?api_key=${encodedApiKey}&limit=100&postedFrom=${postedFrom}&postedTo=${postedTo}&ptype=o,s,k&noticetype=o,s,k&active=true`
+      const apiUrl = `https://api.sam.gov/opportunities/v2/search?api_key=${encodedApiKey}&limit=100&postedFrom=${postedFrom}&postedTo=${postedTo}&ptype=o,s,k,r,p`
 
       console.log(`[v0] 🔍 Consultando SAM.gov API: ${postedFrom} a ${postedTo}`)
 

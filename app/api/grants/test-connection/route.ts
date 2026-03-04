@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
       return await testSamConnection(config)
     } else if (source === "eu") {
       return await testEuConnection(config)
+    } else if (source === "grants-gov") {
+      return await testGrantsGovConnection(config)
     }
 
     return NextResponse.json({ success: false, message: "Invalid source" }, { status: 400 })
@@ -39,36 +41,42 @@ async function testSamConnection(config: any) {
       })
     }
 
-    const keywords = (config.keywords || []).join(" OR ")
+    const keywords = (config.keywords || []).slice(0, 5).join(" OR ")
     const noticeTypes: string[] = []
     if (config.noticeTypes?.solicitation) noticeTypes.push("o")
     if (config.noticeTypes?.sourcesSought) noticeTypes.push("s")
     if (config.noticeTypes?.specialNotice) noticeTypes.push("k")
+    if (config.noticeTypes?.baa) noticeTypes.push("r")
+    if (config.noticeTypes?.presolicitation) noticeTypes.push("p")
 
     const today = new Date()
     const sixMonthsAgo = new Date()
     sixMonthsAgo.setMonth(today.getMonth() - 6)
-    const postedFrom = sixMonthsAgo.toISOString().split("T")[0]
-    const postedTo = today.toISOString().split("T")[0]
+    const postedFrom = sixMonthsAgo.toISOString().split("T")[0].replace(/-/g, "/")
+    const postedTo = today.toISOString().split("T")[0].replace(/-/g, "/")
 
     const params = new URLSearchParams({
       api_key: apiKey,
       limit: "25",
       postedFrom,
       postedTo,
-      ptype: noticeTypes.join(",") || "o,s,k",
-      active: config.activeOnly ? "true" : "false",
+      ptype: noticeTypes.join(",") || "o,s,k,r,p",
     })
 
+    if (config.activeOnly) {
+      params.set("ncode", "o,s,k,r,p")
+    }
+
     if (keywords) {
-      params.set("q", keywords)
+      params.set("keyword", keywords)
     }
 
     if (config.naicsCodes && config.naicsCodes.length > 0) {
-      params.set("naics", config.naicsCodes.join(","))
+      params.set("naics", config.naicsCodes.slice(0, 5).join(","))
     }
 
     const apiUrl = `https://api.sam.gov/opportunities/v2/search?${params.toString()}`
+    console.log("[v0] SAM.gov test URL:", apiUrl.replace(apiKey, "***"))
 
     const response = await fetch(apiUrl, {
       method: "GET",
@@ -157,6 +165,64 @@ async function testEuConnection(config: any) {
       success: true,
       count: filtered.length,
       message: `Connected to EU Funding Portal. Found ${filtered.length} topics matching your filters out of ${allGrants.length} total (keywords: ${config.keywords?.join(", ") || "none"}, prefixes: ${config.topicPrefixes?.length || 0}).`,
+      sample,
+    })
+  } catch (error) {
+    return NextResponse.json({
+      success: false,
+      count: 0,
+      message: `Connection error: ${error instanceof Error ? error.message : "Unknown error"}`,
+    })
+  }
+}
+
+async function testGrantsGovConnection(config: any) {
+  try {
+    const keywords = config.keywords || ["defense"]
+    const searchKeyword = keywords.slice(0, 3).join(" ")
+
+    console.log("[v0] Grants.gov test - keyword:", searchKeyword)
+
+    const response = await fetch("https://api.grants.gov/v1/api/search2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        keyword: searchKeyword,
+        oppStatuses: "posted",
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[v0] Grants.gov test error:", response.status, errorText)
+      return NextResponse.json({
+        success: false,
+        count: 0,
+        message: `Grants.gov API returned status ${response.status}.`,
+      })
+    }
+
+    const data = await response.json()
+    const hits = data?.data?.oppHits || []
+    const total = data?.data?.totalCount || hits.length
+
+    // Filter by agency if configured
+    let filtered = hits
+    if (config.agencies && config.agencies.length > 0) {
+      const agencyFilter = config.agencies.map((a: string) => a.toLowerCase())
+      filtered = hits.filter((opp: any) => {
+        const agency = (opp.agencyName || opp.agencyCode || "").toLowerCase()
+        return agencyFilter.some((af: string) => agency.includes(af))
+      })
+    }
+
+    const sample = filtered.slice(0, 5).map((opp: any) => opp.title || "Untitled")
+
+    return NextResponse.json({
+      success: true,
+      count: total,
+      filteredCount: filtered.length,
+      message: `Connected to Grants.gov API (no key required). Found ${total} total results for "${searchKeyword}". ${config.agencies?.length ? `${filtered.length} matching agency filters.` : ""}`,
       sample,
     })
   } catch (error) {

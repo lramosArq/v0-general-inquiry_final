@@ -32,8 +32,15 @@ export interface APIConfig {
       solicitation: boolean
       sourcesSought: boolean
       specialNotice: boolean
+      baa: boolean
+      presolicitation: boolean
     }
     activeOnly: boolean
+    additionalPortals: {
+      sbirSttr: boolean
+      darpa: boolean
+      afwerxDiu: boolean
+    }
   }
   eu: {
     enabled: boolean
@@ -42,6 +49,9 @@ export interface APIConfig {
       horizonEurope: boolean
       digitalEurope: boolean
       euSpace: boolean
+      edf: boolean
+      edirpaAsap: boolean
+      esa: boolean
     }
     topicPrefixes: string[]
     status: {
@@ -59,22 +69,47 @@ export interface APIConfig {
 const DEFAULT_CONFIG: APIConfig = {
   sam: {
     enabled: true,
-    keywords: ["defense", "space", "sensors", "autonomous"],
-    naicsCodes: ["541715", "334511", "336414", "541330"],
+    keywords: [
+      "UAS", "UAV", "drone", "loitering munition", "counter-UAS", "C-UAS",
+      "electronic warfare", "EW systems", "satellite systems", "space components",
+      "small satellites", "ISR", "surveillance systems", "naval autonomous systems",
+      "USV", "UUV", "defense electronics", "dual-use technology",
+      "secure communications", "advanced aerospace manufacturing",
+      "defense R&D", "military innovation funding",
+    ],
+    naicsCodes: [
+      "541715", "334511", "336414", "541330", "336419", "928110",
+      "334220", "334290", "336411", "334519", "541512",
+    ],
     noticeTypes: {
       solicitation: true,
       sourcesSought: true,
       specialNotice: true,
+      baa: true,
+      presolicitation: true,
     },
     activeOnly: true,
+    additionalPortals: {
+      sbirSttr: true,
+      darpa: true,
+      afwerxDiu: true,
+    },
   },
   eu: {
     enabled: true,
-    keywords: ["space", "cybersecurity", "AI", "digital"],
+    keywords: [
+      "UAS", "UAV", "drone", "counter-UAS", "electronic warfare",
+      "satellite", "space systems", "ISR", "sensors", "autonomous systems",
+      "defense", "dual-use", "secure communications", "cybersecurity",
+      "advanced manufacturing", "naval systems",
+    ],
     programmes: {
       horizonEurope: true,
       digitalEurope: true,
       euSpace: true,
+      edf: true,
+      edirpaAsap: true,
+      esa: true,
     },
     topicPrefixes: [
       "HORIZON-CL4-2026-SPACE",
@@ -82,6 +117,10 @@ const DEFAULT_CONFIG: APIConfig = {
       "DIGITAL-ECCC",
       "HORIZON-WIDERA",
       "HORIZON-EIC",
+      "EDF-2026",
+      "EDIRPA",
+      "EDIP",
+      "HORIZON-CL4-2026-DIGITAL",
     ],
     status: {
       open: true,
@@ -105,7 +144,11 @@ const NAICS_DESCRIPTIONS: Record<string, string> = {
   "336419": "Other Guided Missile & Space Vehicle Parts",
   "928110": "National Security",
   "334290": "Other Communications Equipment",
+  "336411": "Aircraft Manufacturing",
+  "334519": "Other Measuring & Controlling Device Mfg",
   "541711": "R&D in Biotechnology",
+  "334515": "Electricity & Signal Testing Instruments",
+  "336413": "Other Aircraft Parts & Auxiliary Equipment",
 }
 
 interface TestResult {
@@ -274,6 +317,42 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
         </div>
       </div>
 
+      {/* ARQUIMEA Strategic Focus Areas */}
+      <Card className="border-[#1e3a5f]/20 bg-[#f0f4f8]">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Search className="h-4 w-4 text-[#1e3a5f]" />
+            <h3 className="font-semibold text-[#1e3a5f] text-sm">ARQUIMEA Group - Strategic Technology Areas</h3>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              "UAS / UAV / Drones",
+              "Loitering Munitions",
+              "Counter-UAS (C-UAS)",
+              "Space Systems & Satellite Components",
+              "Defense Electronics",
+              "Electronic Warfare (EW)",
+              "ISR & Advanced Sensors",
+              "Naval Autonomous Systems (USV/UUV)",
+              "Secure Communications",
+              "Dual-use Aerospace Tech",
+              "Advanced Manufacturing",
+            ].map((area) => (
+              <Badge
+                key={area}
+                variant="secondary"
+                className="text-xs bg-[#1e3a5f]/10 text-[#1e3a5f] border border-[#1e3a5f]/20"
+              >
+                {area}
+              </Badge>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Search configuration aligned with ARQUIMEA Group capabilities across defense, space, and dual-use sectors.
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* SAM.gov Panel */}
         <Card className="border-[#1e3a5f]/30">
@@ -373,6 +452,8 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
                     { key: "solicitation", label: "Solicitation" },
                     { key: "sourcesSought", label: "Sources Sought" },
                     { key: "specialNotice", label: "Special Notice" },
+                    { key: "baa", label: "BAA (Broad Agency)" },
+                    { key: "presolicitation", label: "Presolicitation" },
                   ].map(({ key, label }) => (
                     <div key={key} className="flex items-center gap-1.5">
                       <Checkbox
@@ -389,6 +470,37 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
                         }
                       />
                       <Label htmlFor={`sam-${key}`} className="text-xs text-gray-600">
+                        {label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Additional US Portals */}
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Additional US Portals</Label>
+                <div className="flex flex-wrap gap-4 mt-2">
+                  {[
+                    { key: "sbirSttr", label: "DoD SBIR/STTR" },
+                    { key: "darpa", label: "DARPA BAA" },
+                    { key: "afwerxDiu", label: "AFWERX / DIU" },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <Checkbox
+                        id={`sam-portal-${key}`}
+                        checked={config.sam.additionalPortals[key as keyof typeof config.sam.additionalPortals]}
+                        onCheckedChange={(checked) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            sam: {
+                              ...prev.sam,
+                              additionalPortals: { ...prev.sam.additionalPortals, [key]: checked },
+                            },
+                          }))
+                        }
+                      />
+                      <Label htmlFor={`sam-portal-${key}`} className="text-xs text-gray-600">
                         {label}
                       </Label>
                     </div>
@@ -525,6 +637,9 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
                     { key: "horizonEurope", label: "Horizon Europe" },
                     { key: "digitalEurope", label: "Digital Europe" },
                     { key: "euSpace", label: "EU Space Programme" },
+                    { key: "edf", label: "EDF (European Defence Fund)" },
+                    { key: "edirpaAsap", label: "EDIRPA / ASAP / EDIP" },
+                    { key: "esa", label: "ESA Funding Calls" },
                   ].map(({ key, label }) => (
                     <div key={key} className="flex items-center gap-1.5">
                       <Checkbox
@@ -751,9 +866,9 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
       <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="text-sm text-gray-500">
           <span className="font-medium text-gray-700">Current config:</span>{" "}
-          SAM.gov {config.sam.enabled ? "ON" : "OFF"} ({config.sam.keywords.length} keywords, {config.sam.naicsCodes.length} NAICS)
+          SAM.gov {config.sam.enabled ? "ON" : "OFF"} ({config.sam.keywords.length} keywords, {config.sam.naicsCodes.length} NAICS, {Object.values(config.sam.additionalPortals).filter(Boolean).length} extra portals)
           {" | "}
-          EU {config.eu.enabled ? "ON" : "OFF"} ({config.eu.keywords.length} keywords, {config.eu.topicPrefixes.length} prefixes)
+          EU {config.eu.enabled ? "ON" : "OFF"} ({config.eu.keywords.length} keywords, {Object.values(config.eu.programmes).filter(Boolean).length} programmes, {config.eu.topicPrefixes.length} prefixes)
           {" | "}
           Blocklist: {config.blocklist.ids.length + config.blocklist.keywords.length} rules
         </div>

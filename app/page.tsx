@@ -10,10 +10,11 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot } from "lucide-react"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
+import { GPTSyncPanel } from "@/components/gpt-sync-panel"
 import { LoginScreen } from "@/components/login-screen"
 import { UserService, type User as UserType } from "@/lib/user-service"
 
@@ -397,6 +398,13 @@ export default function GrantsSearchPage() {
                 <Plug className="h-4 w-4 mr-2" />
                 API Connections
               </TabsTrigger>
+              <TabsTrigger
+                value="gpt-sync"
+                className="text-white/70 data-[state=active]:text-white data-[state=active]:bg-white/10 rounded-none border-b-2 border-transparent data-[state=active]:border-white px-6 py-3"
+              >
+                <Bot className="h-4 w-4 mr-2" />
+                GPT Sync
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -416,7 +424,9 @@ export default function GrantsSearchPage() {
           </Card>
         )}
 
-        {activeTab === "connections" ? (
+        {activeTab === "gpt-sync" ? (
+          <GPTSyncPanel />
+        ) : activeTab === "connections" ? (
           <APIConnectionsPanel
             onConfigSave={(config) => setApiConfig(config)}
             onRefresh={fetchGrants}

@@ -69,8 +69,9 @@ export async function POST(request: NextRequest) {
       // SAM.gov (requires API key)
       try {
         const samApiKey = process.env.SAM_GOV_API_KEY
-        if (samApiKey && samApiKey !== "demo") {
-          const samFetcher = new SAMGovFetcher(samApiKey)
+        console.log("[v0] SAM_GOV_API_KEY present:", !!samApiKey, "length:", samApiKey?.length || 0)
+        if (samApiKey && samApiKey.trim().length > 0) {
+          const samFetcher = new SAMGovFetcher(samApiKey.trim())
           const samTenders = await samFetcher.fetchDefenseTenders()
           const samGrants = samTenders.map((t) => ({
             id: t.id,
@@ -90,7 +91,19 @@ export async function POST(request: NextRequest) {
           allGrants.push(...mappedSam)
           console.log(`[v0] SAM.gov fetched: ${filteredSam.length}`)
         } else {
-          console.log("[v0] SAM.gov API key not configured, skipping SAM.gov")
+          console.log("[v0] SAM.gov API key empty or not configured, using fallback data")
+          const samFetcher = new SAMGovFetcher("")
+          const samTenders = await samFetcher.fetchDefenseTenders()
+          const samGrants = samTenders.map((t) => ({
+            id: t.id, title: t.title, organization: t.organization,
+            status: "Open", publishDate: t.publishDate, deadline: t.deadline,
+            description: t.description, category: t.category, amount: t.amount,
+            url: t.sourceUrl, expedient: t.expedient,
+          }))
+          const filteredSam = samGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
+          const mappedSam = filteredSam.map((g) => mapGrantToFrontend(g, "usa"))
+          allGrants.push(...mappedSam)
+          console.log(`[v0] SAM.gov fallback: ${filteredSam.length}`)
         }
       } catch (error) {
         console.error("[v0] Error fetching SAM.gov:", error)
@@ -160,26 +173,17 @@ export async function GET() {
     // Fetch USA grants - SAM.gov
     try {
       const samApiKey = process.env.SAM_GOV_API_KEY
-      if (samApiKey && samApiKey !== "demo") {
-        const samFetcher = new SAMGovFetcher(samApiKey)
-        const samTenders = await samFetcher.fetchDefenseTenders()
-        const samGrants = samTenders.map((t) => ({
-          id: t.id,
-          title: t.title,
-          organization: t.organization,
-          status: "Open",
-          publishDate: t.publishDate,
-          deadline: t.deadline,
-          description: t.description,
-          category: t.category,
-          amount: t.amount,
-          url: t.sourceUrl,
-          expedient: t.expedient,
-        }))
-        const filteredSam = samGrants.filter((g) => !isBlockedGrant(g))
-        const mappedSam = filteredSam.map((g) => mapGrantToFrontend(g, "usa"))
-        allGrants.push(...mappedSam)
-      }
+      const samFetcher = new SAMGovFetcher(samApiKey?.trim() || "")
+      const samTenders = await samFetcher.fetchDefenseTenders()
+      const samGrants = samTenders.map((t) => ({
+        id: t.id, title: t.title, organization: t.organization,
+        status: "Open", publishDate: t.publishDate, deadline: t.deadline,
+        description: t.description, category: t.category, amount: t.amount,
+        url: t.sourceUrl, expedient: t.expedient,
+      }))
+      const filteredSam = samGrants.filter((g) => !isBlockedGrant(g))
+      const mappedSam = filteredSam.map((g) => mapGrantToFrontend(g, "usa"))
+      allGrants.push(...mappedSam)
     } catch (error) {
       console.error("[v0] Error fetching SAM.gov:", error)
     }

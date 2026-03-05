@@ -164,12 +164,12 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     setSyncLogs([])
 
     const keywords = extractKeywords(customPrompt)
-    addLog("Sync Started", "info", `Scanning all portals with keywords: ${keywords.slice(0, 8).join(", ")}...`)
+    addLog("Sync Started", "info", `Scanning all portals with ${keywords.length} keywords: ${keywords.slice(0, 10).join(", ")}...`)
 
-    const allResults: SyncResult[] = []
     const allRawGrants: any[] = []
+    const grantIds = new Set<string>()
 
-    // Fetch from each source using the REAL grants API
+    // Step 1: Fetch ALL grants from all sources (broad scan, no keyword filter on API side)
     const sources: Array<{ name: string; sourceFilter: string }> = [
       { name: "USA (Grants.gov + SAM.gov)", sourceFilter: "usa" },
       { name: "EU Funding & Tenders Portal", sourceFilter: "eu" },
@@ -178,75 +178,93 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     for (const src of sources) {
       addLog(`${src.name} Scan`, "info", `Querying ${src.name}...`)
       try {
+        // First: broad fetch with no keyword to get all available
         const res = await fetch("/api/grants", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            keyword: keywords.slice(0, 3).join(" "),
-            source: src.sourceFilter,
-          }),
+          body: JSON.stringify({ source: src.sourceFilter }),
         })
         const data = await res.json()
         if (data.success && data.data?.length > 0) {
-          addLog(
-            `${src.name} Scan`,
-            "success",
-            `${src.name}: ${data.data.length} opportunities retrieved from live APIs.`,
-          )
-
           for (const grant of data.data) {
-            const { score, matched } = scoreRelevance(grant, keywords)
-            // Only include grants that match at least one keyword
-            if (matched.length > 0) {
-              const result: SyncResult = {
-                id: grant.id,
-                title: grant.title,
-                source: src.sourceFilter === "usa" ? (grant.agency?.includes("SAM") ? "SAM.gov" : "Grants.gov") : "EU Portal",
-                relevanceScore: score,
-                matchedKeywords: matched.slice(0, 5),
-                url: grant.url || "#",
-                deadline: grant.closeDate || "See portal",
-                status: "new",
-              }
-              allResults.push(result)
-              allRawGrants.push(grant)
+            if (!grantIds.has(grant.id)) {
+              grantIds.add(grant.id)
+              allRawGrants.push({ ...grant, _sourceLabel: src.sourceFilter })
             }
           }
+          addLog(`${src.name} Scan`, "success", `${src.name}: ${data.data.length} opportunities retrieved from live APIs.`)
         } else {
-          addLog(
-            `${src.name} Scan`,
-            "warning",
-            `${src.name}: ${data.data?.length === 0 ? "No opportunities found matching keywords." : data.error || "Unknown issue."}`,
-          )
+          addLog(`${src.name} Scan`, "warning", `${src.name}: ${data.data?.length === 0 ? "No opportunities available." : data.error || "Unknown issue."}`)
+        }
+
+        // Second: targeted keyword searches to catch additional results
+        const searchTerms = keywords.filter((k) => k.length > 3).slice(0, 5)
+        for (const term of searchTerms) {
+          try {
+            const kwRes = await fetch("/api/grants", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ keyword: term, source: src.sourceFilter }),
+            })
+            const kwData = await kwRes.json()
+            if (kwData.success && kwData.data?.length > 0) {
+              let added = 0
+              for (const grant of kwData.data) {
+                if (!grantIds.has(grant.id)) {
+                  grantIds.add(grant.id)
+                  allRawGrants.push({ ...grant, _sourceLabel: src.sourceFilter })
+                  added++
+                }
+              }
+              if (added > 0) {
+                addLog(`${src.name} Keyword`, "info", `"${term}": +${added} new opportunities found.`)
+              }
+            }
+          } catch {
+            // Silently continue with other keywords
+          }
         }
       } catch (error) {
-        addLog(
-          `${src.name} Scan`,
-          "error",
-          `${src.name} connection failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-        )
+        addLog(`${src.name} Scan`, "error", `${src.name} connection failed: ${error instanceof Error ? error.message : "Unknown error"}`)
       }
     }
 
-    // Relevance ranking
-    if (allResults.length > 0) {
-      addLog("AI Analysis", "info", `Scoring ${allResults.length} opportunities against prompt: "${customPrompt.slice(0, 60)}..."`)
-      allResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+    addLog("AI Analysis", "info", `Scoring ${allRawGrants.length} total opportunities against ${keywords.length} keywords...`)
 
-      // Mark top results as confirmed, rest as new
-      allResults.forEach((r, i) => {
-        r.status = i < 5 || r.relevanceScore >= 70 ? "confirmed" : "new"
-      })
+    // Step 2: Score ALL grants against keywords
+    const allResults: SyncResult[] = []
+    for (const grant of allRawGrants) {
+      const { score, matched } = scoreRelevance(grant, keywords)
+      const srcLabel = grant._sourceLabel
+      const result: SyncResult = {
+        id: grant.id,
+        title: grant.title,
+        source: srcLabel === "usa"
+          ? (grant.agency?.toLowerCase().includes("sam") ? "SAM.gov" : "Grants.gov")
+          : "EU Portal",
+        relevanceScore: matched.length > 0 ? score : 30,
+        matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
+        url: grant.url || "#",
+        deadline: grant.closeDate || "See portal",
+        status: "new",
+      }
+      allResults.push(result)
     }
 
-    setSyncResults(allResults)
+    // Step 3: Sort by relevance, mark top as confirmed
+    allResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+    allResults.forEach((r, i) => {
+      if (r.relevanceScore >= 50 || i < 10) {
+        r.status = "confirmed"
+      }
+    })
 
+    // Step 4: Deduplicate
     if (syncConfig.detectDuplicates) {
-      // Deduplicate by title similarity
       const seen = new Set<string>()
       let dupes = 0
       const deduped = allResults.filter((r) => {
-        const key = r.title.toLowerCase().slice(0, 50)
+        const key = r.title.toLowerCase().trim().slice(0, 60)
         if (seen.has(key)) {
           dupes++
           return false
@@ -255,34 +273,35 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
         return true
       })
       if (dupes > 0) {
-        setSyncResults(deduped)
         addLog("Duplicate Check", "info", `Removed ${dupes} duplicate entries.`)
       } else {
         addLog("Duplicate Check", "success", "No duplicates detected.")
       }
+      setSyncResults(deduped)
+    } else {
+      setSyncResults(allResults)
     }
 
     if (syncConfig.categorizeAuto) {
       addLog("Auto-Categorization", "success", "Opportunities categorized by keyword relevance.")
     }
 
-    // Push found grants to the main feed
+    // Step 5: Push ALL found grants to the main feed
     if (allRawGrants.length > 0 && onGrantsFound) {
-      onGrantsFound(allRawGrants)
-      addLog(
-        "Feed Updated",
-        "success",
-        `Pushed ${allRawGrants.length} real opportunities to the Search Grants feed.`,
-      )
+      // Remove internal fields before pushing
+      const cleanGrants = allRawGrants.map(({ _sourceLabel, ...rest }) => rest)
+      onGrantsFound(cleanGrants)
+      addLog("Feed Updated", "success", `Pushed ${cleanGrants.length} opportunities to the Search Grants feed.`)
     }
 
     const sourceNames = [...new Set(allResults.map((r) => r.source))]
+    const highRelevance = allResults.filter((r) => r.relevanceScore >= 50).length
     addLog(
       "Sync Complete",
       allResults.length > 0 ? "success" : "warning",
       allResults.length > 0
-        ? `Found ${allResults.length} relevant opportunities from ${sourceNames.join(", ")}. ${allResults.filter((r) => r.status === "new").length} new, ${allResults.filter((r) => r.status === "confirmed").length} confirmed.`
-        : "No opportunities matched your search prompt. Try broadening your keywords.",
+        ? `Found ${allResults.length} opportunities from ${sourceNames.join(", ")}. ${highRelevance} with high relevance, ${allResults.filter((r) => r.status === "confirmed").length} confirmed.`
+        : "No opportunities found. Check API connections or broaden your keywords.",
     )
 
     setLastSync(new Date())

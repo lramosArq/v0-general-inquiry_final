@@ -490,7 +490,7 @@ export default function GrantsSearchPage() {
                                   eu: key === "eu" ? !!checked : false,
                                 })
                               }
-                            }
+                            }}
                           />
                           <Label htmlFor={`source-${key}`} className="text-sm flex items-center gap-1 cursor-pointer">
                             <Icon className="h-3 w-3" />

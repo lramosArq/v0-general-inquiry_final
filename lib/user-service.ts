@@ -114,7 +114,7 @@ const PREDEFINED_USERS: User[] = [
   {
     id: "user-jjvazquez-008",
     email: "jjvazquez@arquimea.com",
-    password: "Jjvazquez123!",
+    password: "ArqJJV2026!",
     name: "Juanjo Vazquez",
     businessUnit: "Connect",
     role: "",

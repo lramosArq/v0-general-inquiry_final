@@ -111,6 +111,16 @@ const PREDEFINED_USERS: User[] = [
     alerts: [],
     createdAt: "2026-03-04T00:00:00.000Z",
   },
+  {
+    id: "user-jjvazquez-008",
+    email: "jjvazquez@arquimea.com",
+    password: "Jjvazquez123!",
+    name: "Juanjo Vazquez",
+    businessUnit: "Connect",
+    role: "",
+    alerts: [],
+    createdAt: "2026-03-05T00:00:00.000Z",
+  },
 ]
 
 // Simple in-memory/localStorage user service

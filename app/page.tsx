@@ -212,26 +212,34 @@ export default function GrantsSearchPage() {
     if (!categoryFilters.all) {
       filtered = filtered.filter((g) => {
         const titleLower = g.title.toLowerCase()
-        const idLower = g.opportunityNumber.toLowerCase()
+        const idLower = (g.opportunityNumber || "").toLowerCase()
         const agencyLower = (g.agency || "").toLowerCase()
+        const catLower = (g.category || "").toLowerCase()
+        const descLower = (g.description || "").toLowerCase()
 
-        if (categoryFilters.horizonEurope && (titleLower.includes("horizon") || idLower.includes("horizon")))
+        // EU-only categories: only match EU-sourced grants
+        if (categoryFilters.horizonEurope && g.source === "eu" &&
+          (titleLower.includes("horizon") || idLower.includes("horizon") || catLower.includes("horizon")))
           return true
-        if (categoryFilters.digitalEurope && (titleLower.includes("digital") || idLower.includes("digital")))
+        if (categoryFilters.digitalEurope && g.source === "eu" &&
+          (titleLower.includes("digital") || idLower.includes("digital") || catLower.includes("digital")))
           return true
-  
-        if (categoryFilters.cybersecurity && titleLower.includes("cyber")) return true
-        if (categoryFilters.ai && (titleLower.includes("artificial intelligence") || titleLower.includes(" ai ")))
+
+        // Cross-source categories
+        if (categoryFilters.cybersecurity &&
+          (titleLower.includes("cyber") || catLower.includes("cyber") || descLower.includes("cybersecurity")))
           return true
-        if (
-          categoryFilters.space &&
-          (titleLower.includes("space") || titleLower.includes("satellite") || titleLower.includes("gravimetry"))
-        )
+        if (categoryFilters.ai &&
+          (titleLower.includes("artificial intelligence") || titleLower.includes(" ai ") || catLower.includes("ai") || catLower.includes("artificial")))
           return true
-        if (
-          categoryFilters.defense &&
-          (titleLower.includes("defense") || titleLower.includes("darpa") || titleLower.includes("c5isr") || titleLower.includes("cmoss") || titleLower.includes("cmff") || titleLower.includes("missile") || titleLower.includes("devcom") || agencyLower.includes("defense") || agencyLower.includes("darpa"))
-        )
+        if (categoryFilters.space &&
+          (titleLower.includes("space") || titleLower.includes("satellite") || titleLower.includes("gravimetry") || catLower.includes("space")))
+          return true
+        if (categoryFilters.defense &&
+          (titleLower.includes("defense") || titleLower.includes("darpa") || titleLower.includes("c5isr") ||
+            titleLower.includes("cmoss") || titleLower.includes("cmff") || titleLower.includes("missile") ||
+            titleLower.includes("devcom") || agencyLower.includes("defense") || agencyLower.includes("darpa") ||
+            catLower.includes("defense") || catLower.includes("military")))
           return true
 
         return false
@@ -463,6 +471,16 @@ export default function GrantsSearchPage() {
                             id={`source-${key}`}
                             checked={sourceFilter[key as keyof typeof sourceFilter]}
                             onCheckedChange={(checked) => {
+                              // Reset category filters when source changes to avoid cross-source categories
+                              setCategoryFilters({
+                                all: true,
+                                horizonEurope: false,
+                                digitalEurope: false,
+                                cybersecurity: false,
+                                ai: false,
+                                space: false,
+                                defense: false,
+                              })
                               if (key === "all") {
                                 setSourceFilter({ all: true, usa: false, eu: false })
                               } else {
@@ -472,7 +490,7 @@ export default function GrantsSearchPage() {
                                   eu: key === "eu" ? !!checked : false,
                                 })
                               }
-                            }}
+                            }
                           />
                           <Label htmlFor={`source-${key}`} className="text-sm flex items-center gap-1 cursor-pointer">
                             <Icon className="h-3 w-3" />
@@ -512,14 +530,21 @@ export default function GrantsSearchPage() {
                     <h3 className="font-medium text-sm mb-2 text-gray-700">Category</h3>
                     <div className="space-y-2">
                       {[
-                        { key: "all", label: "All Categories" },
-                        { key: "horizonEurope", label: "Horizon Europe" },
-                        { key: "digitalEurope", label: "Digital Europe" },
-                        { key: "cybersecurity", label: "Cybersecurity" },
-                        { key: "ai", label: "Artificial Intelligence" },
-                        { key: "space", label: "Space" },
-                        { key: "defense", label: "Defense" },
-                      ].map(({ key, label }) => (
+                        { key: "all", label: "All Categories", sources: ["all", "usa", "eu"] },
+                        { key: "horizonEurope", label: "Horizon Europe", sources: ["all", "eu"] },
+                        { key: "digitalEurope", label: "Digital Europe", sources: ["all", "eu"] },
+                        { key: "cybersecurity", label: "Cybersecurity", sources: ["all", "usa", "eu"] },
+                        { key: "ai", label: "Artificial Intelligence", sources: ["all", "usa", "eu"] },
+                        { key: "space", label: "Space", sources: ["all", "usa", "eu"] },
+                        { key: "defense", label: "Defense", sources: ["all", "usa", "eu"] },
+                      ]
+                        .filter(({ sources: s }) => {
+                          if (sourceFilter.all) return s.includes("all")
+                          if (sourceFilter.usa) return s.includes("usa")
+                          if (sourceFilter.eu) return s.includes("eu")
+                          return true
+                        })
+                        .map(({ key, label }) => (
                         <div key={key} className="flex items-center space-x-2">
                           <Checkbox
                             id={`category-${key}`}
@@ -595,9 +620,10 @@ export default function GrantsSearchPage() {
                     </div>
                   </div>
 
-                  {/* Programme Filter */}
+                  {/* Programme Filter - Only visible for EU or All sources */}
+                  {(sourceFilter.all || sourceFilter.eu) && (
                   <div className="mb-6">
-                    <h3 className="font-medium text-sm mb-2 text-gray-700">Programme</h3>
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Programme (EU)</h3>
                     <div className="space-y-2">
                       {[
                         { key: "all", label: "All Programmes" },
@@ -631,6 +657,7 @@ export default function GrantsSearchPage() {
                       ))}
                     </div>
                   </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

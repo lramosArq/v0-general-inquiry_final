@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { GrantsGovFetcher } from "@/lib/grants-gov-fetcher"
 import { EUFundingFetcher } from "@/lib/eu-funding-fetcher"
 import { SAMGovFetcher } from "@/lib/sam-gov-fetcher"
+import { SpainGrantsFetcher } from "@/lib/spain-grants-fetcher"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -22,7 +23,7 @@ function isBlockedGrant(
   return false
 }
 
-function mapGrantToFrontend(grant: any, source: "usa" | "eu") {
+function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
   return {
     id: grant.id,
     opportunityNumber: grant.expedient || grant.id,
@@ -36,6 +37,7 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu") {
     fundingInstrument: grant.amount || grant.type,
     source: source,
     url: grant.url || grant.sourceUrl,
+    portal: grant.portal || undefined,
   }
 }
 
@@ -123,6 +125,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Spain grants (BDNS, CDTI, AEI, PRTR, etc.)
+    if (!source || source === "all" || source === "spain") {
+      try {
+        const spainFetcher = new SpainGrantsFetcher()
+        const spainGrants = await spainFetcher.fetchAllGrants(keyword)
+        const filteredSpain = spainGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
+        const mappedSpainGrants = filteredSpain.map((g) => mapGrantToFrontend(g, "spain"))
+        allGrants.push(...mappedSpainGrants)
+        console.log(`[v0] Spain grants fetched: ${filteredSpain.length}`)
+      } catch (error) {
+        console.error("[v0] Error fetching Spain grants:", error)
+      }
+    }
+
     // Sort by posted date (newest first)
     allGrants.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime())
 
@@ -135,6 +151,7 @@ export async function POST(request: NextRequest) {
       sources: {
         usa: allGrants.filter((g) => g.source === "usa").length,
         eu: allGrants.filter((g) => g.source === "eu").length,
+        spain: allGrants.filter((g) => g.source === "spain").length,
       },
       timestamp: new Date().toISOString(),
     })
@@ -199,6 +216,17 @@ export async function GET() {
       console.error("[v0] Error fetching EU grants:", error)
     }
 
+    // Fetch Spain grants
+    try {
+      const spainFetcher = new SpainGrantsFetcher()
+      const spainGrants = await spainFetcher.fetchAllGrants()
+      const filteredSpain = spainGrants.filter((g) => !isBlockedGrant(g))
+      const mappedSpainGrants = filteredSpain.map((g) => mapGrantToFrontend(g, "spain"))
+      allGrants.push(...mappedSpainGrants)
+    } catch (error) {
+      console.error("[v0] Error fetching Spain grants:", error)
+    }
+
     // Sort by posted date
     allGrants.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime())
 
@@ -209,6 +237,7 @@ export async function GET() {
       sources: {
         usa: allGrants.filter((g) => g.source === "usa").length,
         eu: allGrants.filter((g) => g.source === "eu").length,
+        spain: allGrants.filter((g) => g.source === "spain").length,
       },
       timestamp: new Date().toISOString(),
     })

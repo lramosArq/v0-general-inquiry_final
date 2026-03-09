@@ -60,6 +60,32 @@ export interface APIConfig {
       closed: boolean
     }
   }
+  spain: {
+    enabled: boolean
+    keywords: string[]
+    portals: {
+      bdns: boolean
+      cdti: boolean
+      aei: boolean
+      prtr: boolean
+      mincotur: boolean
+      miciu: boolean
+      ayudatec: boolean
+      oepm: boolean
+      minEconomia: boolean
+      ipyme: boolean
+      comunidadMadrid: boolean
+      canarias: boolean
+    }
+    categories: {
+      idi: boolean
+      digitalizacion: boolean
+      internacionalizacion: boolean
+      propiedadIndustrial: boolean
+      emprendimiento: boolean
+      sostenibilidad: boolean
+    }
+  }
   blocklist: {
     ids: string[]
     keywords: string[]
@@ -128,6 +154,36 @@ const DEFAULT_CONFIG: APIConfig = {
       closed: false,
     },
   },
+  spain: {
+    enabled: true,
+    keywords: [
+      "I+D+i", "innovacion", "tecnologia", "digitalizacion", "aeroespacial",
+      "defensa", "espacio", "satelite", "drones", "ciberseguridad",
+      "inteligencia artificial", "industria 4.0", "transformacion digital",
+    ],
+    portals: {
+      bdns: true,
+      cdti: true,
+      aei: true,
+      prtr: true,
+      mincotur: true,
+      miciu: true,
+      ayudatec: true,
+      oepm: true,
+      minEconomia: true,
+      ipyme: true,
+      comunidadMadrid: true,
+      canarias: true,
+    },
+    categories: {
+      idi: true,
+      digitalizacion: true,
+      internacionalizacion: true,
+      propiedadIndustrial: true,
+      emprendimiento: true,
+      sostenibilidad: true,
+    },
+  },
   blocklist: {
     ids: ["VA-NCA-VCGP-2026"],
     keywords: ["veterans cemetery"],
@@ -152,7 +208,7 @@ const NAICS_DESCRIPTIONS: Record<string, string> = {
 }
 
 interface TestResult {
-  source: "sam" | "eu"
+  source: "sam" | "eu" | "spain" | "grants-gov"
   success: boolean
   count: number
   message: string
@@ -169,14 +225,17 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
   const [testingSam, setTestingSam] = useState(false)
   const [testingEu, setTestingEu] = useState(false)
   const [testingGrantsGov, setTestingGrantsGov] = useState(false)
+  const [testingSpain, setTestingSpain] = useState(false)
   const [samResult, setSamResult] = useState<TestResult | null>(null)
   const [euResult, setEuResult] = useState<TestResult | null>(null)
   const [grantsGovResult, setGrantsGovResult] = useState<TestResult | null>(null)
+  const [spainResult, setSpainResult] = useState<TestResult | null>(null)
   const [saved, setSaved] = useState(false)
   const [newBlockId, setNewBlockId] = useState("")
   const [newBlockKeyword, setNewBlockKeyword] = useState("")
   const [newSamKeyword, setNewSamKeyword] = useState("")
   const [newEuKeyword, setNewEuKeyword] = useState("")
+  const [newSpainKeyword, setNewSpainKeyword] = useState("")
   const [newNaics, setNewNaics] = useState("")
   const [newTopicPrefix, setNewTopicPrefix] = useState("")
 
@@ -198,6 +257,12 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
             ...parsed.eu,
             programmes: { ...DEFAULT_CONFIG.eu.programmes, ...(parsed.eu?.programmes || {}) },
             status: { ...DEFAULT_CONFIG.eu.status, ...(parsed.eu?.status || {}) },
+          },
+          spain: {
+            ...DEFAULT_CONFIG.spain,
+            ...parsed.spain,
+            portals: { ...DEFAULT_CONFIG.spain.portals, ...(parsed.spain?.portals || {}) },
+            categories: { ...DEFAULT_CONFIG.spain.categories, ...(parsed.spain?.categories || {}) },
           },
           blocklist: {
             ...DEFAULT_CONFIG.blocklist,
@@ -302,6 +367,38 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
     }
   }
 
+  const handleTestSpain = async () => {
+    setTestingSpain(true)
+    setSpainResult(null)
+    try {
+      const response = await fetch("/api/grants/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "spain",
+          config: config.spain,
+        }),
+      })
+      const result = await response.json()
+      setSpainResult({
+        source: "spain",
+        success: result.success,
+        count: result.count || 0,
+        message: result.message || "",
+        sample: result.sample || [],
+      })
+    } catch (error) {
+      setSpainResult({
+        source: "spain",
+        success: false,
+        count: 0,
+        message: error instanceof Error ? error.message : "Connection failed",
+      })
+    } finally {
+      setTestingSpain(false)
+    }
+  }
+
   const handleSave = () => {
     localStorage.setItem("apiConfig", JSON.stringify(config))
     onConfigSave(config)
@@ -315,7 +412,7 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
   }
 
   const addToList = (
-    path: "sam.keywords" | "sam.naicsCodes" | "eu.keywords" | "eu.topicPrefixes" | "blocklist.ids" | "blocklist.keywords",
+    path: "sam.keywords" | "sam.naicsCodes" | "eu.keywords" | "eu.topicPrefixes" | "spain.keywords" | "blocklist.ids" | "blocklist.keywords",
     value: string,
     setter: (v: string) => void,
   ) => {
@@ -334,7 +431,7 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
   }
 
   const removeFromList = (
-    path: "sam.keywords" | "sam.naicsCodes" | "eu.keywords" | "eu.topicPrefixes" | "blocklist.ids" | "blocklist.keywords",
+    path: "sam.keywords" | "sam.naicsCodes" | "eu.keywords" | "eu.topicPrefixes" | "spain.keywords" | "blocklist.ids" | "blocklist.keywords",
     value: string,
   ) => {
     setConfig((prev) => {
@@ -408,7 +505,7 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
         {/* SAM.gov Panel */}
         <Card className="border-[#1e3a5f]/30">
           <CardContent className="p-5">
@@ -915,6 +1012,188 @@ export function APIConnectionsPanel({ onConfigSave, onRefresh }: APIConnectionsP
                     <div className="mt-2 space-y-1">
                       <p className="text-xs font-medium text-gray-500">Sample results:</p>
                       {euResult.sample.map((title, i) => (
+                        <p key={i} className="text-xs text-gray-600 truncate">
+                          {i + 1}. {title}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Spain Portals Panel */}
+        <Card className="border-[#1e3a5f]/30">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Flag className="h-5 w-5 text-red-600" />
+                <h3 className="font-semibold text-red-800 text-lg">Portales Espana</h3>
+                <Badge variant="outline" className="text-xs border-red-300 text-red-700 bg-red-50">
+                  ES
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="spain-enabled" className="text-xs text-gray-500">
+                  Enabled
+                </Label>
+                <Switch
+                  id="spain-enabled"
+                  checked={config.spain.enabled}
+                  onCheckedChange={(checked) =>
+                    setConfig((prev) => ({ ...prev, spain: { ...prev.spain, enabled: checked } }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className={`space-y-4 ${!config.spain.enabled ? "opacity-50 pointer-events-none" : ""}`}>
+              {/* Spain Keywords */}
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Palabras clave</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    placeholder="ej. I+D, innovacion, espacio..."
+                    value={newSpainKeyword}
+                    onChange={(e) => setNewSpainKeyword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addToList("spain.keywords", newSpainKeyword, setNewSpainKeyword)}
+                    className="text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => addToList("spain.keywords", newSpainKeyword, setNewSpainKeyword)}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2 max-h-20 overflow-y-auto">
+                  {config.spain.keywords.map((kw) => (
+                    <Badge
+                      key={kw}
+                      variant="secondary"
+                      className="text-xs bg-red-50 text-red-700 cursor-pointer hover:bg-red-100 transition-colors"
+                      onClick={() => removeFromList("spain.keywords", kw)}
+                    >
+                      {kw} <Trash2 className="h-2.5 w-2.5 ml-1" />
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Spanish Portals */}
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Portales de Subvenciones</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2 max-h-48 overflow-y-auto">
+                  {[
+                    { key: "bdns", label: "BDNS" },
+                    { key: "cdti", label: "CDTI" },
+                    { key: "aei", label: "AEI" },
+                    { key: "prtr", label: "Plan Recuperacion" },
+                    { key: "mincotur", label: "Min. Industria" },
+                    { key: "miciu", label: "Min. Ciencia" },
+                    { key: "ayudatec", label: "Ayudatec" },
+                    { key: "oepm", label: "OEPM" },
+                    { key: "minEconomia", label: "Min. Economia" },
+                    { key: "ipyme", label: "IPYME/ENISA" },
+                    { key: "comunidadMadrid", label: "C. Madrid" },
+                    { key: "canarias", label: "Canarias" },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <Checkbox
+                        id={`spain-${key}`}
+                        checked={config.spain.portals[key as keyof typeof config.spain.portals]}
+                        onCheckedChange={(checked) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            spain: {
+                              ...prev.spain,
+                              portals: { ...prev.spain.portals, [key]: checked },
+                            },
+                          }))
+                        }
+                      />
+                      <Label htmlFor={`spain-${key}`} className="text-xs text-gray-600">
+                        {label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Categories */}
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Categorias</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {[
+                    { key: "idi", label: "I+D+i" },
+                    { key: "digitalizacion", label: "Digitalizacion" },
+                    { key: "internacionalizacion", label: "Internacion." },
+                    { key: "propiedadIndustrial", label: "Patentes" },
+                    { key: "emprendimiento", label: "Emprendimiento" },
+                    { key: "sostenibilidad", label: "Sostenibilidad" },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <Checkbox
+                        id={`spain-cat-${key}`}
+                        checked={config.spain.categories[key as keyof typeof config.spain.categories]}
+                        onCheckedChange={(checked) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            spain: {
+                              ...prev.spain,
+                              categories: { ...prev.spain.categories, [key]: checked },
+                            },
+                          }))
+                        }
+                      />
+                      <Label htmlFor={`spain-cat-${key}`} className="text-xs text-gray-600">
+                        {label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Test Connection Button */}
+              <Button
+                onClick={handleTestSpain}
+                disabled={testingSpain}
+                className="w-full bg-red-700 hover:bg-red-800 text-white"
+              >
+                {testingSpain ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Probando conexion...
+                  </>
+                ) : (
+                  <>
+                    <Database className="h-4 w-4 mr-2" /> Test Portales Espana
+                  </>
+                )}
+              </Button>
+
+              {/* Test Result */}
+              {spainResult && (
+                <div
+                  className={`p-3 rounded-lg border ${spainResult.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {spainResult.success ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-600" />
+                    )}
+                    <span className={`text-sm font-medium ${spainResult.success ? "text-green-700" : "text-red-700"}`}>
+                      {spainResult.success ? `${spainResult.count} subvenciones` : "Conexion fallida"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600">{spainResult.message}</p>
+                  {spainResult.sample && spainResult.sample.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs font-medium text-gray-500">Ejemplos:</p>
+                      {spainResult.sample.map((title, i) => (
                         <p key={i} className="text-xs text-gray-600 truncate">
                           {i + 1}. {title}
                         </p>

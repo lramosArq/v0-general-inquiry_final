@@ -32,7 +32,7 @@ interface Grant {
   amount?: number
   description: string
   url: string
-  source: "usa" | "eu"
+  source: "usa" | "eu" | "spain"
 }
 
 export default function GrantsSearchPage() {
@@ -59,6 +59,7 @@ export default function GrantsSearchPage() {
     all: true,
     usa: false,
     eu: false,
+    spain: false,
   })
 
   const [statusFilters, setStatusFilters] = useState({
@@ -170,10 +171,12 @@ export default function GrantsSearchPage() {
 
     // Source filter
     if (!sourceFilter.all) {
-      if (sourceFilter.usa) {
-        filtered = filtered.filter((g) => g.source === "usa")
-      } else if (sourceFilter.eu) {
-        filtered = filtered.filter((g) => g.source === "eu")
+      const enabledSources: string[] = []
+      if (sourceFilter.usa) enabledSources.push("usa")
+      if (sourceFilter.eu) enabledSources.push("eu")
+      if (sourceFilter.spain) enabledSources.push("spain")
+      if (enabledSources.length > 0) {
+        filtered = filtered.filter((g) => enabledSources.includes(g.source))
       }
     }
 
@@ -276,6 +279,7 @@ export default function GrantsSearchPage() {
     if (sourceFilter.all) sources.push("all")
     if (sourceFilter.usa) sources.push("usa")
     if (sourceFilter.eu) sources.push("eu")
+    if (sourceFilter.spain) sources.push("spain")
 
     const categories: string[] = []
     if (categoryFilters.all) categories.push("all")
@@ -465,6 +469,7 @@ export default function GrantsSearchPage() {
                         { key: "all", label: "All Sources", icon: Globe },
                         { key: "usa", label: "USA (Grants.gov)", icon: Flag },
                         { key: "eu", label: "EU (Funding & Tenders)", icon: Globe },
+                        { key: "spain", label: "Spain (Subvenciones)", icon: Flag },
                       ].map(({ key, label, icon: Icon }) => (
                         <div key={key} className="flex items-center space-x-2">
                           <Checkbox
@@ -482,13 +487,14 @@ export default function GrantsSearchPage() {
                                 defense: false,
                               })
                               if (key === "all") {
-                                setSourceFilter({ all: true, usa: false, eu: false })
+                                setSourceFilter({ all: true, usa: false, eu: false, spain: false })
                               } else {
-                                setSourceFilter({
+                                setSourceFilter((prev) => ({
                                   all: false,
-                                  usa: key === "usa" ? !!checked : false,
-                                  eu: key === "eu" ? !!checked : false,
-                                })
+                                  usa: key === "usa" ? !!checked : prev.usa && key !== "usa" ? prev.usa : false,
+                                  eu: key === "eu" ? !!checked : prev.eu && key !== "eu" ? prev.eu : false,
+                                  spain: key === "spain" ? !!checked : prev.spain && key !== "spain" ? prev.spain : false,
+                                }))
                               }
                             }}
                           />
@@ -530,18 +536,19 @@ export default function GrantsSearchPage() {
                     <h3 className="font-medium text-sm mb-2 text-gray-700">Category</h3>
                     <div className="space-y-2">
                       {[
-                        { key: "all", label: "All Categories", sources: ["all", "usa", "eu"] },
+                        { key: "all", label: "All Categories", sources: ["all", "usa", "eu", "spain"] },
                         { key: "horizonEurope", label: "Horizon Europe", sources: ["all", "eu"] },
                         { key: "digitalEurope", label: "Digital Europe", sources: ["all", "eu"] },
-                        { key: "cybersecurity", label: "Cybersecurity", sources: ["all", "usa", "eu"] },
-                        { key: "ai", label: "Artificial Intelligence", sources: ["all", "usa", "eu"] },
-                        { key: "space", label: "Space", sources: ["all", "usa", "eu"] },
-                        { key: "defense", label: "Defense", sources: ["all", "usa", "eu"] },
+                        { key: "cybersecurity", label: "Cybersecurity", sources: ["all", "usa", "eu", "spain"] },
+                        { key: "ai", label: "Artificial Intelligence", sources: ["all", "usa", "eu", "spain"] },
+                        { key: "space", label: "Space", sources: ["all", "usa", "eu", "spain"] },
+                        { key: "defense", label: "Defense", sources: ["all", "usa", "eu", "spain"] },
                       ]
                         .filter(({ sources: s }) => {
                           if (sourceFilter.all) return s.includes("all")
                           if (sourceFilter.usa) return s.includes("usa")
                           if (sourceFilter.eu) return s.includes("eu")
+                          if (sourceFilter.spain) return s.includes("spain")
                           return true
                         })
                         .map(({ key, label }) => (
@@ -794,10 +801,12 @@ export default function GrantsSearchPage() {
                                     className={
                                       grant.source === "usa"
                                         ? "bg-blue-50 text-blue-700 border-blue-200"
-                                        : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                        : grant.source === "spain"
+                                          ? "bg-red-50 text-red-700 border-red-200"
+                                          : "bg-yellow-50 text-yellow-700 border-yellow-200"
                                     }
                                   >
-                                    {grant.source === "usa" ? "USA" : "EU"}
+                                    {grant.source === "usa" ? "USA" : grant.source === "spain" ? "ES" : "EU"}
                                   </Badge>
                                 </td>
                               </tr>

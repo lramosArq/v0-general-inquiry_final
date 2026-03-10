@@ -8,7 +8,7 @@ interface Grant {
   id: string
   title: string
   category: string
-  source: "usa" | "eu"
+  source: "usa" | "eu" | "spain"
   openDate: string
   closeDate: string
   status: string
@@ -18,6 +18,7 @@ interface Grant {
 
 interface MarketIntelligenceProps {
   grants: Grant[]
+  onCategoryClick?: (category: string, keywords: string[]) => void
 }
 
 // Arquimea Group companies and their focus areas
@@ -99,7 +100,7 @@ const CATEGORIES = {
   "Civil Society & Values": ["citizen", "values", "democracy", "civil society", "civic"],
 }
 
-export function MarketIntelligence({ grants }: MarketIntelligenceProps) {
+export function MarketIntelligence({ grants, onCategoryClick }: MarketIntelligenceProps) {
   // Count grants by category using real data
   const grantsByCategory = Object.entries(CATEGORIES)
     .map(([category, keywords]) => {
@@ -206,36 +207,46 @@ export function MarketIntelligence({ grants }: MarketIntelligenceProps) {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {grantsByCategory.map(({ category, count, euCount, usaCount }) => (
-              <Card key={category} className="bg-gray-50">
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-semibold text-sm text-[#1e3a5f]">{category}</h4>
-                    <Badge className="bg-[#1e3a5f]">{count}</Badge>
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    {euCount > 0 && (
-                      <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
-                        EU: {euCount}
-                      </Badge>
-                    )}
-                    {usaCount > 0 && (
-                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
-                        USA: {usaCount}
-                      </Badge>
-                    )}
-                  </div>
-                  {/* Progress bar showing relative distribution */}
-                  <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#1e3a5f] rounded-full"
-                      style={{ width: `${Math.min((count / grants.length) * 100 * 3, 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">{((count / grants.length) * 100).toFixed(1)}% of total</p>
-                </CardContent>
-              </Card>
-            ))}
+            {grantsByCategory.map(({ category, count, euCount, usaCount }) => {
+              const keywords = CATEGORIES[category as keyof typeof CATEGORIES] || []
+              return (
+                <Card 
+                  key={category} 
+                  className={`bg-gray-50 transition-all ${onCategoryClick ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 hover:shadow-md' : ''}`}
+                  onClick={() => onCategoryClick?.(category, keywords)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-semibold text-sm text-[#1e3a5f]">{category}</h4>
+                      <Badge className="bg-[#1e3a5f]">{count}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {euCount > 0 && (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                          EU: {euCount}
+                        </Badge>
+                      )}
+                      {usaCount > 0 && (
+                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
+                          USA: {usaCount}
+                        </Badge>
+                      )}
+                    </div>
+                    {/* Progress bar showing relative distribution */}
+                    <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#1e3a5f] rounded-full"
+                        style={{ width: `${Math.min((count / grants.length) * 100 * 3, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {((count / grants.length) * 100).toFixed(1)}% of total
+                      {onCategoryClick && <span className="ml-1 text-blue-600">- Click to filter</span>}
+                    </p>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         </CardContent>
       </Card>

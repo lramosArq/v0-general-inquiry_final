@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { EUFundingFetcher } from "@/lib/eu-funding-fetcher"
+import { SpainGrantsFetcher } from "@/lib/spain-grants-fetcher"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -15,6 +16,8 @@ export async function POST(request: NextRequest) {
       return await testEuConnection(config)
     } else if (source === "grants-gov") {
       return await testGrantsGovConnection(config)
+    } else if (source === "spain") {
+      return await testSpainConnection(config)
     }
 
     return NextResponse.json({ success: false, message: "Invalid source" }, { status: 400 })
@@ -256,6 +259,79 @@ async function testGrantsGovConnection(config: any) {
       success: false,
       count: 0,
       message: `Connection error: ${error instanceof Error ? error.message : "Unknown error"}`,
+    })
+  }
+}
+
+async function testSpainConnection(config: any) {
+  try {
+    const fetcher = new SpainGrantsFetcher()
+    const allGrants = await fetcher.fetchAllGrants()
+
+    let filtered = allGrants
+
+    // Filter by keywords
+    if (config.keywords && config.keywords.length > 0) {
+      const kws = config.keywords.map((k: string) => k.toLowerCase())
+      filtered = filtered.filter((g: any) => {
+        const text = `${g.title} ${g.description} ${g.category} ${g.organization}`.toLowerCase()
+        return kws.some((kw: string) => text.includes(kw))
+      })
+    }
+
+    // Filter by enabled portals
+    if (config.portals) {
+      const enabledPortals: string[] = []
+      if (config.portals.bdns) enabledPortals.push("bdns")
+      if (config.portals.cdti) enabledPortals.push("cdti")
+      if (config.portals.aei) enabledPortals.push("aei")
+      if (config.portals.prtr) enabledPortals.push("prtr", "plan de recuperacion")
+      if (config.portals.mincotur) enabledPortals.push("mincotur", "min. industria", "industria y turismo")
+      if (config.portals.miciu) enabledPortals.push("miciu", "min. ciencia", "ciencia")
+      if (config.portals.ayudatec) enabledPortals.push("ayudatec")
+      if (config.portals.oepm) enabledPortals.push("oepm")
+      if (config.portals.minEconomia) enabledPortals.push("economia", "ico", "mineco")
+      if (config.portals.ipyme) enabledPortals.push("ipyme", "enisa")
+      if (config.portals.comunidadMadrid) enabledPortals.push("madrid")
+      if (config.portals.canarias) enabledPortals.push("canarias", "aciisi")
+
+      if (enabledPortals.length > 0) {
+        const portalFiltered = filtered.filter((g: any) => {
+          const portal = (g.portal || g.organization || "").toLowerCase()
+          return enabledPortals.some((p) => portal.includes(p))
+        })
+        // Only apply if it yields results
+        if (portalFiltered.length > 0 || enabledPortals.length === Object.keys(config.portals).length) {
+          filtered = portalFiltered
+        }
+      }
+    }
+
+    // Count by portal
+    const portalCounts: Record<string, number> = {}
+    allGrants.forEach((g: any) => {
+      const portal = g.portal || "Otro"
+      portalCounts[portal] = (portalCounts[portal] || 0) + 1
+    })
+
+    const portalSummary = Object.entries(portalCounts)
+      .map(([p, c]) => `${p}: ${c}`)
+      .join(", ")
+
+    const sample = filtered.slice(0, 5).map((g: any) => `[${g.portal}] ${g.title}`)
+
+    return NextResponse.json({
+      success: true,
+      count: allGrants.length,
+      filteredCount: filtered.length,
+      message: `Conectado a portales espanoles. ${allGrants.length} subvenciones totales. ${filtered.length} coinciden con tus filtros. Portales: ${portalSummary}`,
+      sample,
+    })
+  } catch (error) {
+    return NextResponse.json({
+      success: false,
+      count: 0,
+      message: `Error de conexion: ${error instanceof Error ? error.message : "Error desconocido"}`,
     })
   }
 }

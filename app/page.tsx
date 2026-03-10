@@ -490,8 +490,16 @@ export default function GrantsSearchPage() {
             onConfigSave={(config) => setApiConfig(config)}
             onRefresh={fetchGrants}
           />
-        ) : activeTab === "intelligence" ? (
-          <MarketIntelligence grants={grants} />
+            ) : activeTab === "intelligence" ? (
+              <MarketIntelligence 
+                grants={grants} 
+                onCategoryClick={(category, keywords) => {
+                  // Set the keyword filter to the first keyword of the category
+                  setKeyword(keywords[0] || category.toLowerCase())
+                  // Switch to grants tab
+                  setActiveTab("grants")
+                }}
+              />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Filters Sidebar */}

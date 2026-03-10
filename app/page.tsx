@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown } from "lucide-react"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
@@ -47,6 +47,10 @@ export default function GrantsSearchPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [showAlertsPanel, setShowAlertsPanel] = useState(false)
   const [apiConfig, setApiConfig] = useState<APIConfig | null>(null)
+
+  // Interest feedback for training
+  const [interestFeedback, setInterestFeedback] = useState<Record<string, "interested" | "not_interested">>({})
+  const [feedbackStats, setFeedbackStats] = useState({ interested: 0, notInterested: 0 })
 
   // Search filters
   const [keyword, setKeyword] = useState("")
@@ -110,6 +114,18 @@ export default function GrantsSearchPage() {
       setCurrentUser({ ...user, alerts: user.alerts || [] })
     }
     setIsCheckingAuth(false)
+
+    // Load interest feedback from localStorage
+    try {
+      const savedFeedback = localStorage.getItem("grantInterestFeedback")
+      if (savedFeedback) {
+        const parsed = JSON.parse(savedFeedback)
+        setInterestFeedback(parsed)
+        const interested = Object.values(parsed).filter((v) => v === "interested").length
+        const notInterested = Object.values(parsed).filter((v) => v === "not_interested").length
+        setFeedbackStats({ interested, notInterested })
+      }
+    } catch { /* ignore */ }
   }, [])
 
   useEffect(() => {
@@ -164,6 +180,29 @@ export default function GrantsSearchPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleInterestFeedback = (grantId: string, interest: "interested" | "not_interested") => {
+    const newFeedback = { ...interestFeedback }
+    
+    // Toggle: if same value clicked again, remove feedback
+    if (newFeedback[grantId] === interest) {
+      delete newFeedback[grantId]
+    } else {
+      newFeedback[grantId] = interest
+    }
+
+    setInterestFeedback(newFeedback)
+
+    // Update stats
+    const interested = Object.values(newFeedback).filter((v) => v === "interested").length
+    const notInterested = Object.values(newFeedback).filter((v) => v === "not_interested").length
+    setFeedbackStats({ interested, notInterested })
+
+    // Persist to localStorage
+    try {
+      localStorage.setItem("grantInterestFeedback", JSON.stringify(newFeedback))
+    } catch { /* ignore */ }
   }
 
   const applyFilters = () => {
@@ -696,9 +735,22 @@ export default function GrantsSearchPage() {
                 <CardContent className="p-0">
                   <div className="p-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex justify-between items-center">
-                      <h2 className="font-semibold text-[#1e3a5f]">
-                        {isLoading ? "Loading..." : `${filteredGrants.length} Opportunities Found`}
-                      </h2>
+                      <div className="flex items-center gap-4">
+                        <h2 className="font-semibold text-[#1e3a5f]">
+                          {isLoading ? "Loading..." : `${filteredGrants.length} Opportunities Found`}
+                        </h2>
+                        {(feedbackStats.interested > 0 || feedbackStats.notInterested > 0) && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              <ThumbsUp className="h-3 w-3 mr-1" /> {feedbackStats.interested} Interested
+                            </Badge>
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                              <ThumbsDown className="h-3 w-3 mr-1" /> {feedbackStats.notInterested} Not Interested
+                            </Badge>
+                            <span className="text-gray-500">Training memory</span>
+                          </div>
+                        )}
+                      </div>
                       <select
                         className="text-sm border rounded px-2 py-1"
                         value={sortBy}
@@ -709,7 +761,7 @@ export default function GrantsSearchPage() {
                         <option value="close-desc">Close Date (Latest)</option>
                         <option value="close-asc">Close Date (Soonest)</option>
                       </select>
-                    </div>
+                      </div>
                   </div>
 
                   {isLoading ? (
@@ -729,12 +781,13 @@ export default function GrantsSearchPage() {
                             <th className="text-left p-3">Open Date</th>
                             <th className="text-left p-3">Close Date</th>
                             <th className="text-left p-3">Source</th>
+                            <th className="text-left p-3">Training</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                           {paginatedGrants.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="text-center py-8 text-gray-500">
+                              <td colSpan={8} className="text-center py-8 text-gray-500">
                                 No grants found matching your criteria
                               </td>
                             </tr>
@@ -808,6 +861,36 @@ export default function GrantsSearchPage() {
                                   >
                                     {grant.source === "usa" ? "USA" : grant.source === "spain" ? "ES" : "EU"}
                                   </Badge>
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant={interestFeedback[grant.id] === "interested" ? "default" : "outline"}
+                                      className={`h-7 w-7 p-0 ${
+                                        interestFeedback[grant.id] === "interested"
+                                          ? "bg-green-600 hover:bg-green-700 text-white"
+                                          : "hover:bg-green-50 hover:text-green-600 hover:border-green-300"
+                                      }`}
+                                      onClick={() => handleInterestFeedback(grant.id, "interested")}
+                                      title="Mark as Interested - Train AI"
+                                    >
+                                      <ThumbsUp className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={interestFeedback[grant.id] === "not_interested" ? "default" : "outline"}
+                                      className={`h-7 w-7 p-0 ${
+                                        interestFeedback[grant.id] === "not_interested"
+                                          ? "bg-red-600 hover:bg-red-700 text-white"
+                                          : "hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                                      }`}
+                                      onClick={() => handleInterestFeedback(grant.id, "not_interested")}
+                                      title="Mark as Not Interested - Train AI"
+                                    >
+                                      <ThumbsDown className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
                                 </td>
                               </tr>
                             ))

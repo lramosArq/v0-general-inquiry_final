@@ -173,6 +173,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     const sources: Array<{ name: string; sourceFilter: string }> = [
       { name: "USA (Grants.gov + SAM.gov)", sourceFilter: "usa" },
       { name: "EU Funding & Tenders Portal", sourceFilter: "eu" },
+      { name: "Spain (BDNS, CDTI, AEI, PRTR)", sourceFilter: "spain" },
     ]
 
     for (const src of sources) {
@@ -241,7 +242,9 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
         title: grant.title,
         source: srcLabel === "usa"
           ? (grant.agency?.toLowerCase().includes("sam") ? "SAM.gov" : "Grants.gov")
-          : "EU Portal",
+          : srcLabel === "spain"
+            ? (grant.agency || grant.portal || "Spain Portal")
+            : "EU Portal",
         relevanceScore: matched.length > 0 ? score : 30,
         matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
         url: grant.url || "#",
@@ -367,7 +370,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
         </CardHeader>
         <CardContent className="pt-0">
           <p className="text-sm text-gray-600 mb-4">
-            AI-powered synchronization that scans official portals (SAM.gov, EU Funding & Tenders, DARPA, SBIR/STTR), 
+            AI-powered synchronization that scans official portals (SAM.gov, EU Funding & Tenders, Spain BDNS/CDTI/AEI/PRTR), 
             analyzes relevance against ARQUIMEA strategic profile, and surfaces the most relevant opportunities.
           </p>
 

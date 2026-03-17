@@ -109,6 +109,7 @@ const NAICS_OPTIONS = [
 ]
 
 export function FundingSearch({ onSearch, onFiltersChange }: FundingSearchProps) {
+  console.log("[v0] FundingSearch component rendering")
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([])
   const [showSavedSearches, setShowSavedSearches] = useState(false)

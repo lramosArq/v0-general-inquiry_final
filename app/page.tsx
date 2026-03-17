@@ -41,7 +41,7 @@ export default function GrantsSearchPage() {
   const [filteredGrants, setFilteredGrants] = useState<Grant[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
-  const [activeTab, setActiveTab] = useState("search")
+  const [activeTab, setActiveTab] = useState("advanced-search")
   const itemsPerPage = 25
 
   const [currentUser, setCurrentUser] = useState<UserType | null>(null)
@@ -510,6 +510,7 @@ export default function GrantsSearchPage() {
               />
         ) : activeTab === "advanced-search" ? (
           <div className="space-y-6">
+            {console.log("[v0] Rendering advanced-search tab")}
             <FundingSearch
               onSearch={(searchFilters) => {
                 // Apply the advanced search filters

@@ -498,23 +498,18 @@ export default function GrantsSearchPage() {
             onConfigSave={(config) => setApiConfig(config)}
             onRefresh={fetchGrants}
           />
-            ) : activeTab === "intelligence" ? (
-              <MarketIntelligence 
-                grants={grants} 
-                onCategoryClick={(category, keywords) => {
-                  // Set the keyword filter to the first keyword of the category
-                  setKeyword(keywords[0] || category.toLowerCase())
-                  // Switch to grants tab
-                  setActiveTab("search")
-                }}
-              />
+        ) : activeTab === "intelligence" ? (
+          <MarketIntelligence 
+            grants={grants} 
+            onCategoryClick={(category, keywords) => {
+              setKeyword(keywords[0] || category.toLowerCase())
+              setActiveTab("search")
+            }}
+          />
         ) : activeTab === "advanced-search" ? (
           <div className="space-y-6">
-            {console.log("[v0] Rendering advanced-search tab")}
             <FundingSearch
               onSearch={(searchFilters) => {
-                // Apply the advanced search filters
-                // Map region filter to source filter
                 if (!searchFilters.region.includes("ALL")) {
                   const newSourceFilter = {
                     all: false,
@@ -527,7 +522,6 @@ export default function GrantsSearchPage() {
                   setSourceFilter({ all: true, usa: false, eu: false, spain: false })
                 }
                 
-                // Map status filter
                 if (!searchFilters.status.includes("ALL")) {
                   setStatusFilters({
                     forecasted: false,
@@ -539,25 +533,14 @@ export default function GrantsSearchPage() {
                   setStatusFilters({ forecasted: true, open: true, closed: false, archived: false })
                 }
                 
-                // Set keyword from prompt and keywords
                 const combinedKeywords = [searchFilters.prompt, searchFilters.keywords]
                   .filter(Boolean)
                   .join(" ")
                 setKeyword(combinedKeywords)
                 
-                // Switch to search tab to see results
                 setActiveTab("search")
               }}
             />
-            
-            {/* Results Preview */}
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-gray-600 text-center py-8">
-                  Configure your search filters above and click "Search" to find funding opportunities.
-                </p>
-              </CardContent>
-            </Card>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

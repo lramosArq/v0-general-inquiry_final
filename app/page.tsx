@@ -144,7 +144,6 @@ export default function GrantsSearchPage() {
   const fetchGrants = async () => {
     setIsLoading(true)
     try {
-      console.log("[v0] Fetching grants...")
       // Load saved blocklist config
       let blocklist: { ids: string[]; keywords: string[] } | undefined
       try {
@@ -168,16 +167,12 @@ export default function GrantsSearchPage() {
 
       if (response.ok) {
         const result = await response.json()
-        console.log("[v0] API Response:", result)
         const fetchedGrants = result.data || result.grants || []
-        console.log("[v0] Fetched grants count:", fetchedGrants.length)
         setGrants(fetchedGrants)
         setFilteredGrants(fetchedGrants)
-      } else {
-        console.error("[v0] API Error:", response.status)
       }
     } catch (error) {
-      console.error("[v0] Error fetching grants:", error)
+      // Silent error handling
     } finally {
       setIsLoading(false)
     }

@@ -23,8 +23,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`font-sans ${inter.variable}`}>
-        <Suspense fallback={null}>{children}</Suspense>
+      <body className={`font-sans ${inter.variable} antialiased`}>
+        <Suspense
+          fallback={
+            <div className="min-h-screen bg-gradient-to-br from-[#1e3a5f] to-[#2d4a6f] flex items-center justify-center">
+              <div className="text-white text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                <p>Loading Arquimea Grants...</p>
+              </div>
+            </div>
+          }
+        >
+          {children}
+        </Suspense>
       </body>
     </html>
   )

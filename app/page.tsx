@@ -10,13 +10,12 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, Sparkles } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown } from "lucide-react"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
 import { GPTSyncPanel } from "@/components/gpt-sync-panel"
 import { LoginScreen } from "@/components/login-screen"
-import { FundingSearch, type SearchFilters } from "@/components/funding-search"
 import { UserService, type User as UserType } from "@/lib/user-service"
 
 interface Grant {
@@ -429,14 +428,7 @@ export default function GrantsSearchPage() {
                 className="text-white/70 data-[state=active]:text-white data-[state=active]:bg-white/10 rounded-none border-b-2 border-transparent data-[state=active]:border-white px-6 py-3"
               >
                 <Search className="h-4 w-4 mr-2" />
-                Quick Search
-              </TabsTrigger>
-              <TabsTrigger
-                value="advanced-search"
-                className="text-white/70 data-[state=active]:text-white data-[state=active]:bg-white/10 rounded-none border-b-2 border-transparent data-[state=active]:border-white px-6 py-3"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                Advanced Search
+                Search Grants
               </TabsTrigger>
               <TabsTrigger
                 value="intelligence"
@@ -501,42 +493,6 @@ export default function GrantsSearchPage() {
               setActiveTab("search")
             }}
           />
-        ) : activeTab === "advanced-search" ? (
-          <div className="space-y-6">
-            <FundingSearch
-              onSearch={(searchFilters) => {
-                if (!searchFilters.region.includes("ALL")) {
-                  const newSourceFilter = {
-                    all: false,
-                    usa: searchFilters.region.includes("US"),
-                    eu: searchFilters.region.includes("Europe"),
-                    spain: searchFilters.region.includes("Spain"),
-                  }
-                  setSourceFilter(newSourceFilter)
-                } else {
-                  setSourceFilter({ all: true, usa: false, eu: false, spain: false })
-                }
-                
-                if (!searchFilters.status.includes("ALL")) {
-                  setStatusFilters({
-                    forecasted: false,
-                    open: searchFilters.status.includes("Active"),
-                    closed: searchFilters.status.includes("Closed"),
-                    archived: false,
-                  })
-                } else {
-                  setStatusFilters({ forecasted: true, open: true, closed: false, archived: false })
-                }
-                
-                const combinedKeywords = [searchFilters.prompt, searchFilters.keywords]
-                  .filter(Boolean)
-                  .join(" ")
-                setKeyword(combinedKeywords)
-                
-                setActiveTab("search")
-              }}
-            />
-          </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Filters Sidebar */}

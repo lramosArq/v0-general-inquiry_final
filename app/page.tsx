@@ -109,12 +109,15 @@ export default function GrantsSearchPage() {
   })
 
   useEffect(() => {
+    console.log("[v0] Checking auth...")
     const userService = UserService.getInstance()
     const user = userService.getCurrentUser()
+    console.log("[v0] Current user:", user)
     if (user) {
       setCurrentUser({ ...user, alerts: user.alerts || [] })
     }
     setIsCheckingAuth(false)
+    console.log("[v0] Auth check complete")
 
     // Load interest feedback from localStorage
     try {
@@ -382,7 +385,10 @@ export default function GrantsSearchPage() {
     return "Open"
   }
 
+  console.log("[v0] Render state:", { isCheckingAuth, currentUser: !!currentUser, activeTab })
+
   if (isCheckingAuth) {
+    console.log("[v0] Showing loading spinner")
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#1e3a5f] to-[#2d4a6f] flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-white animate-spin" />
@@ -391,9 +397,11 @@ export default function GrantsSearchPage() {
   }
 
   if (!currentUser) {
+    console.log("[v0] Showing login screen")
     return <LoginScreen onAuthSuccess={handleAuthSuccess} />
   }
 
+  console.log("[v0] Showing main dashboard")
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
       {/* Header */}

@@ -143,6 +143,7 @@ export default function GrantsSearchPage() {
   const fetchGrants = async () => {
     setIsLoading(true)
     try {
+      console.log("[v0] Fetching grants...")
       // Load saved blocklist config
       let blocklist: { ids: string[]; keywords: string[] } | undefined
       try {
@@ -166,12 +167,16 @@ export default function GrantsSearchPage() {
 
       if (response.ok) {
         const result = await response.json()
+        console.log("[v0] API Response:", result)
         const fetchedGrants = result.data || result.grants || []
+        console.log("[v0] Fetched grants count:", fetchedGrants.length)
         setGrants(fetchedGrants)
         setFilteredGrants(fetchedGrants)
+      } else {
+        console.error("[v0] API Error:", response.status)
       }
     } catch (error) {
-      // Silent error handling
+      console.error("[v0] Error fetching grants:", error)
     } finally {
       setIsLoading(false)
     }
@@ -485,14 +490,16 @@ export default function GrantsSearchPage() {
             onConfigSave={(config) => setApiConfig(config)}
             onRefresh={fetchGrants}
           />
-        ) : activeTab === "intelligence" ? (
-          <MarketIntelligence 
-            grants={grants} 
-            onCategoryClick={(category, keywords) => {
-              setKeyword(keywords[0] || category.toLowerCase())
-              setActiveTab("search")
-            }}
-          />
+            ) : activeTab === "intelligence" ? (
+              <MarketIntelligence 
+                grants={grants} 
+                onCategoryClick={(category, keywords) => {
+                  // Set the keyword filter to the first keyword of the category
+                  setKeyword(keywords[0] || category.toLowerCase())
+                  // Switch to grants tab
+                  setActiveTab("grants")
+                }}
+              />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Filters Sidebar */}

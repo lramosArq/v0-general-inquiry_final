@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Bot,
   RefreshCw,
@@ -34,7 +35,26 @@ import {
   ChevronUp,
   Play,
   Pause,
+  Plus,
+  Save,
+  Trash2,
+  Edit3,
+  Bell,
+  BellOff,
+  X,
 } from "lucide-react"
+
+// Custom user-defined searches
+interface CustomSearch {
+  id: string
+  name: string
+  prompt: string
+  keywords: string[]
+  alertsEnabled: boolean
+  createdAt: Date
+  lastRun: Date | null
+  resultsCount: number
+}
 
 // ARQUIMEA Programs with their specialized prompts
 const ARQUIMEA_PROGRAMS = [
@@ -373,6 +393,19 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     return initial
   })
 
+  // Custom Search State
+  const [customSearches, setCustomSearches] = useState<CustomSearch[]>([])
+  const [isCreatingCustom, setIsCreatingCustom] = useState(false)
+  const [editingCustomId, setEditingCustomId] = useState<string | null>(null)
+  const [customForm, setCustomForm] = useState({
+    name: "",
+    prompt: "",
+    keywordsText: "",
+    alertsEnabled: true,
+  })
+  const [customSyncStates, setCustomSyncStates] = useState<Record<string, { isRunning: boolean; lastRun: Date | null }>>({})
+  const [expandedCustomSearches, setExpandedCustomSearches] = useState<Set<string>>(new Set())
+
   const [syncConfig, setSyncConfig] = useState({
     analyzRelevance: true,
     detectDuplicates: true,
@@ -409,6 +442,16 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
             parsed.syncLogs.map((l: any) => ({ ...l, timestamp: new Date(l.timestamp) }))
           )
         }
+        // Load custom searches
+        if (parsed.customSearches) {
+          setCustomSearches(
+            parsed.customSearches.map((cs: any) => ({
+              ...cs,
+              createdAt: new Date(cs.createdAt),
+              lastRun: cs.lastRun ? new Date(cs.lastRun) : null,
+            }))
+          )
+        }
       }
     } catch {
       /* ignore */
@@ -425,12 +468,13 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
           programStates,
           syncConfig,
           syncLogs: syncLogs.slice(0, 100),
+          customSearches,
         })
       )
     } catch {
       /* ignore */
     }
-  }, [syncResults, programStates, syncConfig, syncLogs])
+  }, [syncResults, programStates, syncConfig, syncLogs, customSearches])
 
   const addLog = (action: string, status: SyncLog["status"], details: string, programId?: string) => {
     setSyncLogs((prev) => [{ timestamp: new Date(), action, status, details, programId }, ...prev].slice(0, 200))
@@ -593,6 +637,211 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     }))
   }
 
+  // Custom Search Functions
+  const saveCustomSearch = () => {
+    const keywords = customForm.keywordsText
+      .split(",")
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0)
+
+    if (!customForm.name || !customForm.prompt || keywords.length === 0) {
+      addLog("Custom Search", "error", "Please fill in all fields: name, prompt, and at least one keyword.")
+      return
+    }
+
+    if (editingCustomId) {
+      // Update existing
+      setCustomSearches((prev) =>
+        prev.map((cs) =>
+          cs.id === editingCustomId
+            ? {
+                ...cs,
+                name: customForm.name,
+                prompt: customForm.prompt,
+                keywords,
+                alertsEnabled: customForm.alertsEnabled,
+              }
+            : cs
+        )
+      )
+      addLog("Custom Search", "success", `Updated custom search: ${customForm.name}`)
+    } else {
+      // Create new
+      const newSearch: CustomSearch = {
+        id: `custom-${Date.now()}`,
+        name: customForm.name,
+        prompt: customForm.prompt,
+        keywords,
+        alertsEnabled: customForm.alertsEnabled,
+        createdAt: new Date(),
+        lastRun: null,
+        resultsCount: 0,
+      }
+      setCustomSearches((prev) => [newSearch, ...prev])
+      addLog("Custom Search", "success", `Created new custom search: ${customForm.name}`)
+    }
+
+    // Reset form
+    setCustomForm({ name: "", prompt: "", keywordsText: "", alertsEnabled: true })
+    setIsCreatingCustom(false)
+    setEditingCustomId(null)
+  }
+
+  const editCustomSearch = (search: CustomSearch) => {
+    setCustomForm({
+      name: search.name,
+      prompt: search.prompt,
+      keywordsText: search.keywords.join(", "),
+      alertsEnabled: search.alertsEnabled,
+    })
+    setEditingCustomId(search.id)
+    setIsCreatingCustom(true)
+  }
+
+  const deleteCustomSearch = (id: string) => {
+    setCustomSearches((prev) => prev.filter((cs) => cs.id !== id))
+    setSyncResults((prev) => prev.filter((r) => r.programId !== id))
+    addLog("Custom Search", "info", "Custom search deleted")
+  }
+
+  const toggleCustomAlerts = (id: string) => {
+    setCustomSearches((prev) =>
+      prev.map((cs) => (cs.id === id ? { ...cs, alertsEnabled: !cs.alertsEnabled } : cs))
+    )
+  }
+
+  const runCustomSearchSync = async (search: CustomSearch) => {
+    setCustomSyncStates((prev) => ({ ...prev, [search.id]: { isRunning: true, lastRun: prev[search.id]?.lastRun || null } }))
+    setActiveProgramId(search.id)
+
+    addLog(`Custom: ${search.name}`, "info", `Starting custom search with prompt...`, search.id)
+
+    const allRawGrants: any[] = []
+    const grantIds = new Set<string>()
+
+    const sources: Array<{ name: string; sourceFilter: string }> = [
+      { name: "USA (Grants.gov + SAM.gov)", sourceFilter: "usa" },
+      { name: "EU Funding & Tenders Portal", sourceFilter: "eu" },
+      { name: "Spain (BDNS, CDTI, AEI, PRTR)", sourceFilter: "spain" },
+    ]
+
+    for (const src of sources) {
+      try {
+        const res = await fetch("/api/grants", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: src.sourceFilter }),
+        })
+        const data = await res.json()
+        if (data.success && data.data?.length > 0) {
+          for (const grant of data.data) {
+            if (!grantIds.has(grant.id)) {
+              grantIds.add(grant.id)
+              allRawGrants.push({ ...grant, _sourceLabel: src.sourceFilter })
+            }
+          }
+        }
+
+        // Keyword searches
+        const searchTerms = search.keywords.slice(0, 5)
+        for (const term of searchTerms) {
+          try {
+            const kwRes = await fetch("/api/grants", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ keyword: term, source: src.sourceFilter }),
+            })
+            const kwData = await kwRes.json()
+            if (kwData.success && kwData.data?.length > 0) {
+              for (const grant of kwData.data) {
+                if (!grantIds.has(grant.id)) {
+                  grantIds.add(grant.id)
+                  allRawGrants.push({ ...grant, _sourceLabel: src.sourceFilter })
+                }
+              }
+            }
+          } catch {
+            // Continue
+          }
+        }
+      } catch (error) {
+        addLog(`Custom: ${search.name}`, "warning", `${src.name} connection issue`, search.id)
+      }
+    }
+
+    // Score grants
+    const customResults: SyncResult[] = []
+    for (const grant of allRawGrants) {
+      const { score, matched } = scoreRelevance(grant, search.keywords)
+      if (matched.length > 0 || score >= 50) {
+        const srcLabel = grant._sourceLabel
+        customResults.push({
+          id: grant.id,
+          title: grant.title,
+          source: srcLabel === "usa"
+            ? (grant.agency?.toLowerCase().includes("sam") ? "SAM.gov" : "Grants.gov")
+            : srcLabel === "spain"
+              ? (grant.agency || grant.portal || "Spain Portal")
+              : "EU Portal",
+          relevanceScore: score,
+          matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
+          url: grant.url || "#",
+          deadline: grant.closeDate || "See portal",
+          status: "new",
+          programId: search.id,
+        })
+      }
+    }
+
+    customResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+    customResults.forEach((r, i) => {
+      if (r.relevanceScore >= 60 || i < 5) {
+        r.status = "confirmed"
+      }
+    })
+
+    // Update results
+    setSyncResults((prev) => {
+      const filtered = prev.filter((r) => r.programId !== search.id)
+      return [...filtered, ...customResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
+    })
+
+    // Update custom search stats
+    setCustomSearches((prev) =>
+      prev.map((cs) =>
+        cs.id === search.id ? { ...cs, lastRun: new Date(), resultsCount: customResults.length } : cs
+      )
+    )
+
+    // Push to main feed
+    if (allRawGrants.length > 0 && onGrantsFound) {
+      const cleanGrants = allRawGrants.map(({ _sourceLabel, ...rest }) => rest)
+      onGrantsFound(cleanGrants)
+    }
+
+    addLog(
+      `Custom: ${search.name}`,
+      customResults.length > 0 ? "success" : "warning",
+      `Found ${customResults.length} relevant opportunities (${customResults.filter((r) => r.relevanceScore >= 60).length} high-relevance)`,
+      search.id
+    )
+
+    setCustomSyncStates((prev) => ({ ...prev, [search.id]: { isRunning: false, lastRun: new Date() } }))
+    setActiveProgramId(null)
+  }
+
+  const toggleCustomExpanded = (id: string) => {
+    setExpandedCustomSearches((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
   const toggleProgramExpanded = (programId: string) => {
     setExpandedPrograms((prev) => {
       const next = new Set(prev)
@@ -701,6 +950,299 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
               </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Custom Search Module */}
+      <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-white">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-emerald-800 flex items-center gap-2 text-lg">
+              <Search className="h-5 w-5" />
+              Custom Grant Search
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {customSearches.length > 0 && (
+                <Badge variant="secondary" className="text-xs bg-emerald-100 text-emerald-800">
+                  {customSearches.length} saved searches
+                </Badge>
+              )}
+              {!isCreatingCustom && (
+                <Button
+                  onClick={() => {
+                    setIsCreatingCustom(true)
+                    setEditingCustomId(null)
+                    setCustomForm({ name: "", prompt: "", keywordsText: "", alertsEnabled: true })
+                  }}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  New Search
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p className="text-sm text-gray-600 mb-4">
+            Create your own custom grant search with personalized prompts and keywords. Save searches to run them again or enable alerts for new opportunities.
+          </p>
+
+          {/* Create/Edit Form */}
+          {isCreatingCustom && (
+            <div className="border border-emerald-200 rounded-lg p-4 mb-4 bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold text-emerald-800">
+                  {editingCustomId ? "Edit Custom Search" : "Create New Custom Search"}
+                </h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsCreatingCustom(false)
+                    setEditingCustomId(null)
+                    setCustomForm({ name: "", prompt: "", keywordsText: "", alertsEnabled: true })
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="custom-name" className="text-sm font-medium text-gray-700">
+                    Search Name
+                  </Label>
+                  <Input
+                    id="custom-name"
+                    placeholder="e.g., Quantum Computing R&D"
+                    value={customForm.name}
+                    onChange={(e) => setCustomForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="custom-prompt" className="text-sm font-medium text-gray-700">
+                    Search Prompt
+                  </Label>
+                  <Textarea
+                    id="custom-prompt"
+                    placeholder="Describe what you're looking for... e.g., Search for grants and contracts related to quantum computing hardware, superconducting qubits, error correction, quantum algorithms, and quantum machine learning applications."
+                    value={customForm.prompt}
+                    onChange={(e) => setCustomForm((prev) => ({ ...prev, prompt: e.target.value }))}
+                    className="mt-1 min-h-[100px]"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Be specific about technologies, applications, and domains you want to find.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="custom-keywords" className="text-sm font-medium text-gray-700">
+                    Keywords (comma-separated)
+                  </Label>
+                  <Input
+                    id="custom-keywords"
+                    placeholder="e.g., quantum computing, superconducting, qubit, error correction"
+                    value={customForm.keywordsText}
+                    onChange={(e) => setCustomForm((prev) => ({ ...prev, keywordsText: e.target.value }))}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    These keywords will be used to search and score relevance of opportunities.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="custom-alerts"
+                    checked={customForm.alertsEnabled}
+                    onCheckedChange={(checked) =>
+                      setCustomForm((prev) => ({ ...prev, alertsEnabled: !!checked }))
+                    }
+                  />
+                  <Label htmlFor="custom-alerts" className="text-sm text-gray-700 cursor-pointer">
+                    Enable alerts for new opportunities matching this search
+                  </Label>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsCreatingCustom(false)
+                      setEditingCustomId(null)
+                      setCustomForm({ name: "", prompt: "", keywordsText: "", alertsEnabled: true })
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={saveCustomSearch} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                    <Save className="h-4 w-4 mr-1" />
+                    {editingCustomId ? "Update Search" : "Save Search"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Saved Custom Searches */}
+          {customSearches.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {customSearches.map((search) => {
+                const syncState = customSyncStates[search.id]
+                const searchResults = syncResults.filter((r) => r.programId === search.id)
+                const isExpanded = expandedCustomSearches.has(search.id)
+
+                return (
+                  <div
+                    key={search.id}
+                    className={`border rounded-lg p-3 bg-white transition-all ${
+                      activeProgramId === search.id ? "ring-2 ring-emerald-400" : "border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded bg-emerald-500">
+                          <Search className="h-4 w-4 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm text-gray-800">{search.name}</h4>
+                          {search.lastRun && (
+                            <span className="text-[10px] text-gray-400">
+                              Last run: {search.lastRun.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => toggleCustomAlerts(search.id)}
+                          title={search.alertsEnabled ? "Disable alerts" : "Enable alerts"}
+                        >
+                          {search.alertsEnabled ? (
+                            <Bell className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <BellOff className="h-3.5 w-3.5 text-gray-400" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => editCustomSearch(search)}
+                        >
+                          <Edit3 className="h-3.5 w-3.5 text-gray-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 hover:text-red-600"
+                          onClick={() => deleteCustomSearch(search.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Prompt preview */}
+                    <p className="text-[10px] text-gray-500 mb-2 line-clamp-2">{search.prompt.slice(0, 100)}...</p>
+
+                    {/* Keywords */}
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {search.keywords.slice(0, 4).map((kw) => (
+                        <Badge key={kw} variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-200">
+                          {kw}
+                        </Badge>
+                      ))}
+                      {search.keywords.length > 4 && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-gray-50">
+                          +{search.keywords.length - 4}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-between">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7 border-emerald-200 hover:bg-emerald-50"
+                        disabled={syncState?.isRunning || isSyncing}
+                        onClick={() => runCustomSearchSync(search)}
+                      >
+                        {syncState?.isRunning ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Searching...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-3 w-3 mr-1" />
+                            Run Search
+                          </>
+                        )}
+                      </Button>
+
+                      {searchResults.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-7"
+                          onClick={() => toggleCustomExpanded(search.id)}
+                        >
+                          <Badge className="bg-emerald-600 text-white text-[10px] mr-1">
+                            {searchResults.length}
+                          </Badge>
+                          {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Expanded Results */}
+                    {isExpanded && searchResults.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 max-h-48 overflow-y-auto space-y-2">
+                        {searchResults.slice(0, 5).map((result) => (
+                          <div key={result.id} className="text-xs">
+                            <a
+                              href={result.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-emerald-700 hover:underline font-medium line-clamp-1"
+                            >
+                              {result.title}
+                            </a>
+                            <div className="flex items-center gap-2 text-gray-400 mt-0.5">
+                              <span>{result.source}</span>
+                              <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
+                                {result.relevanceScore}%
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                        {searchResults.length > 5 && (
+                          <p className="text-[10px] text-gray-400 text-center">+{searchResults.length - 5} more</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {customSearches.length === 0 && !isCreatingCustom && (
+            <div className="text-center py-6 border-2 border-dashed border-emerald-200 rounded-lg">
+              <Search className="h-8 w-8 text-emerald-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No custom searches yet.</p>
+              <p className="text-xs text-gray-400">Click "New Search" to create your first custom grant search.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

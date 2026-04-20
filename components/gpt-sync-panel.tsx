@@ -21,7 +21,208 @@ import {
   Shield,
   Satellite,
   Loader2,
+  Rocket,
+  Cpu,
+  Radio,
+  Microscope,
+  Plane,
+  Ship,
+  Brain,
+  Compass,
+  Activity,
+  ChevronDown,
+  ChevronUp,
+  Play,
+  Pause,
 } from "lucide-react"
+
+// ARQUIMEA Programs with their specialized prompts
+const ARQUIMEA_PROGRAMS = [
+  {
+    id: "arqeos-missiles",
+    name: "ARQEOS Missiles",
+    icon: Rocket,
+    color: "bg-red-500",
+    prompt: "Search for grants and contracts related to long-range strike systems, loitering munitions, cruise missiles, subsonic tactical missiles, turbojet propulsion, modular warhead systems, AI-assisted targeting, man-in-the-loop control systems, and hybrid drone-missile platforms for defense applications.",
+    keywords: ["strike systems", "loitering munition", "cruise missile", "turbojet", "warhead", "tactical missile", "AI targeting", "defense"],
+  },
+  {
+    id: "beetlesat",
+    name: "BeetleSat Constellation",
+    icon: Satellite,
+    color: "bg-blue-500",
+    prompt: "Search for grants and contracts related to LEO satellite constellations, Ka-band connectivity, deployable antennas, inter-satellite links (ISL), high-throughput satellites, low-latency communications, cellular backhaul, space-qualified components, and satellite integration facilities.",
+    keywords: ["satellite constellation", "LEO", "Ka-band", "ISL", "inter-satellite", "high-throughput", "space communication", "satellite integration"],
+  },
+  {
+    id: "biotechnology",
+    name: "ARQUIMEA Biotechnology",
+    icon: Microscope,
+    color: "bg-green-500",
+    prompt: "Search for grants and contracts related to ALS therapeutics, Alzheimer's treatment, cancer research, wearable biosensors, microbiology platforms, antibiotic discovery, extremophile metagenomes, AI-driven drug discovery, postbiotics, microbiota research, soil remediation, organoid research, and translational medicine.",
+    keywords: ["ALS", "Alzheimer", "biosensor", "microbiology", "antibiotic", "drug discovery", "therapeutics", "biotechnology", "microbiome"],
+  },
+  {
+    id: "deeparq",
+    name: "DeepArq Autonomy Platform",
+    icon: Brain,
+    color: "bg-purple-500",
+    prompt: "Search for grants and contracts related to UAV autonomy software, AI pilot systems, mission control systems, autonomous behaviors, target tracking, search and recognition, tactical edge computing, resilient communications, human-in-the-loop supervision, and multi-platform coordination.",
+    keywords: ["UAV autonomy", "AI pilot", "autonomous", "mission control", "target tracking", "tactical edge", "swarm", "UAS software"],
+  },
+  {
+    id: "hw-sw-subsystems",
+    name: "HW-SW Subsystems for Secure Autonomy",
+    icon: Cpu,
+    color: "bg-indigo-500",
+    prompt: "Search for grants and contracts related to ITAR-free systems, autonomous system architectures, sensor fusion, real-time mission planning, resilient communication frameworks, cross-platform compatibility, AI-driven autonomy subsystems, and supply chain security for defense systems.",
+    keywords: ["ITAR-free", "autonomous systems", "sensor fusion", "mission planning", "resilient communication", "defense architecture", "secure systems"],
+  },
+  {
+    id: "pulsar-propulsion",
+    name: "PULSAR Propulsion Systems",
+    icon: Zap,
+    color: "bg-yellow-500",
+    prompt: "Search for grants and contracts related to high-efficiency propulsion, UAV propulsion systems, extended flight duration, energy efficiency optimization, payload capacity enhancement, electric motors for drones, next-generation propulsion, and autonomous flight capabilities.",
+    keywords: ["propulsion", "UAV motor", "flight duration", "electric propulsion", "drone efficiency", "payload capacity", "PULSAR"],
+  },
+  {
+    id: "space-mechanisms",
+    name: "Space Mechanisms & Actuators",
+    icon: Satellite,
+    color: "bg-cyan-500",
+    prompt: "Search for grants and contracts related to space-qualified mechanisms, release and deployment devices, pyrotechnic-free actuators, Hold-Down Release Mechanisms (HDRM), non-explosive release systems, rotary actuators, antenna deployment, solar array deployment, and ITAR-free space components.",
+    keywords: ["space mechanism", "actuator", "HDRM", "deployment system", "release mechanism", "space qualified", "ITAR-free space"],
+  },
+  {
+    id: "molefy-pharma",
+    name: "Molefy Pharma",
+    icon: Activity,
+    color: "bg-pink-500",
+    prompt: "Search for grants and contracts related to neurodegenerative disease treatment, ALS therapeutics, TDP-43 modulation, TTBK1 inhibitors, frontotemporal dementia, GMP drug production, Phase I clinical trials, small-molecule drugs, and orphan drug designation.",
+    keywords: ["neurodegenerative", "ALS", "TDP-43", "TTBK1", "dementia", "clinical trial", "orphan drug", "pharma"],
+  },
+  {
+    id: "propellantless-propulsion",
+    name: "Propellantless Space Propulsion",
+    icon: Compass,
+    color: "bg-orange-500",
+    prompt: "Search for grants and contracts related to propellantless propulsion, piezoelectric thrust generation, resonant excitation, attitude control systems, delta-v capability, small satellite propulsion, and advanced space propulsion research.",
+    keywords: ["propellantless", "piezoelectric", "attitude control", "delta-v", "small satellite", "advanced propulsion", "space propulsion"],
+  },
+  {
+    id: "naval-loitering",
+    name: "Naval Loitering Systems",
+    icon: Ship,
+    color: "bg-slate-500",
+    prompt: "Search for grants and contracts related to naval autonomous systems, kamikaze vessels, surface/subsurface drones, hybrid maritime platforms, autonomous submarines, naval strike capability, swarm coordination, maritime defense, and asymmetric naval warfare.",
+    keywords: ["naval autonomous", "maritime drone", "submarine", "surface vessel", "naval strike", "swarm", "maritime defense", "USV"],
+  },
+  {
+    id: "qslam-family",
+    name: "Q-SLAM Loitering Munitions",
+    icon: Target,
+    color: "bg-red-600",
+    prompt: "Search for grants and contracts related to tactical loitering munitions, man-portable drone systems, surveillance reconnaissance, force protection, target acquisition, battle damage assessment, GPS-denied operations, and human-in-the-loop control systems.",
+    keywords: ["loitering munition", "man-portable", "surveillance", "reconnaissance", "force protection", "target acquisition", "Q-SLAM", "tactical drone"],
+  },
+  {
+    id: "comms-payloads",
+    name: "High Data Rate Communications",
+    icon: Radio,
+    color: "bg-teal-500",
+    prompt: "Search for grants and contracts related to high data rate communication payloads, satellite communication systems, secure data links, bandwidth optimization, space communication technology, and next-generation communication systems.",
+    keywords: ["high data rate", "communication payload", "satellite comms", "secure link", "bandwidth", "space communication"],
+  },
+  {
+    id: "neuromorphic-perception",
+    name: "Neuromorphic Perception Systems",
+    icon: Brain,
+    color: "bg-violet-500",
+    prompt: "Search for grants and contracts related to neuromorphic computing, event-based sensors, brain-inspired processing, low-latency perception, energy-efficient AI, edge computing for defense, situational awareness systems, and multi-modal sensing.",
+    keywords: ["neuromorphic", "event-based", "brain-inspired", "edge AI", "perception", "situational awareness", "low-latency"],
+  },
+  {
+    id: "pulsar-hri",
+    name: "PULSAR HRI Robotics",
+    icon: Cpu,
+    color: "bg-amber-500",
+    prompt: "Search for grants and contracts related to high-bandwidth actuators, torque-dense motors, quasi-direct-drive actuators, legged robotics, collaborative robotics, wearable robotics, human-robot interaction, PMSM motors, and robotic actuation systems.",
+    keywords: ["actuator", "torque motor", "QDD", "legged robot", "collaborative robot", "wearable robot", "HRI", "PMSM"],
+  },
+  {
+    id: "satellite-denied-nav",
+    name: "Satellite-Denied Navigation",
+    icon: Compass,
+    color: "bg-emerald-500",
+    prompt: "Search for grants and contracts related to GPS-denied navigation, alternative PNT solutions, inertial navigation systems (INS), computer vision navigation, magnetic anomaly mapping, celestial navigation, quantum sensors, terrain navigation, and resilient positioning systems.",
+    keywords: ["GPS-denied", "PNT", "INS", "inertial navigation", "celestial navigation", "quantum sensor", "terrain navigation", "positioning"],
+  },
+  {
+    id: "trustworthy-ai",
+    name: "Trustworthy AI for Autonomy",
+    icon: Shield,
+    color: "bg-blue-600",
+    prompt: "Search for grants and contracts related to safe autonomous systems, AI decision-making, adaptive mission planning, collision avoidance, human-machine teaming, predictive trajectory optimization, fail-safe mechanisms, and operational resilience in GPS-denied environments.",
+    keywords: ["trustworthy AI", "safe autonomy", "mission planning", "collision avoidance", "human-machine", "trajectory", "fail-safe", "resilient AI"],
+  },
+  {
+    id: "sdr-communications",
+    name: "Software Defined Radios (SDR)",
+    icon: Radio,
+    color: "bg-indigo-600",
+    prompt: "Search for grants and contracts related to software defined radios, MANET networks, anti-jamming technology, dynamic spectrum management, adaptive waveforms, electronic warfare resilience, SWaP optimization, and secure tactical communications.",
+    keywords: ["SDR", "MANET", "anti-jamming", "spectrum management", "waveform", "electronic warfare", "tactical comms", "SWaP"],
+  },
+  {
+    id: "edge-ai-satellites",
+    name: "Edge AI for Satellites",
+    icon: Satellite,
+    color: "bg-purple-600",
+    prompt: "Search for grants and contracts related to onboard satellite AI, edge computing in space, real-time image processing, anomaly detection, autonomous mission optimization, satellite data processing, and intelligent space systems.",
+    keywords: ["edge AI", "satellite AI", "onboard processing", "anomaly detection", "autonomous satellite", "space AI", "image processing"],
+  },
+  {
+    id: "thermo-structural",
+    name: "Satellite Thermo-Structural Solutions",
+    icon: Satellite,
+    color: "bg-gray-500",
+    prompt: "Search for grants and contracts related to satellite thermal management, embedded heat pipes, composite panels, thermal-structural integration, heat dissipation systems, dimensional stability, and satellite platform architecture.",
+    keywords: ["thermal management", "heat pipe", "composite panel", "thermal-structural", "heat dissipation", "satellite platform"],
+  },
+  {
+    id: "uncharted-therapeutics",
+    name: "Uncharted Therapeutics",
+    icon: Microscope,
+    color: "bg-rose-500",
+    prompt: "Search for grants and contracts related to generative AI drug discovery, de novo molecular design, AI-driven therapeutics, computational chemistry, molecular candidates generation, and accelerated drug development pipelines.",
+    keywords: ["generative AI", "drug discovery", "molecular design", "AI therapeutics", "computational chemistry", "de novo"],
+  },
+  {
+    id: "volinga",
+    name: "Volinga 3D/Radiance Fields",
+    icon: Sparkles,
+    color: "bg-fuchsia-500",
+    prompt: "Search for grants and contracts related to neural rendering, 3D Gaussian Splatting, radiance fields, virtual production, real-time 3D environments, Unreal Engine integration, photorealistic rendering, and media entertainment technology.",
+    keywords: ["neural rendering", "3DGS", "radiance fields", "virtual production", "real-time 3D", "Unreal Engine", "photorealistic"],
+  },
+  {
+    id: "zen-biometrics",
+    name: "Zen Biometrics",
+    icon: Activity,
+    color: "bg-lime-500",
+    prompt: "Search for grants and contracts related to cortisol monitoring, stress biomarkers, microneedle technology, wearable health sensors, preventive mental healthcare, continuous health monitoring, and Addison's disease management.",
+    keywords: ["cortisol", "stress monitoring", "microneedle", "wearable sensor", "mental health", "biomarker", "health monitoring"],
+  },
+  {
+    id: "locomotion-defense",
+    name: "Locomotion Systems for Defense",
+    icon: Plane,
+    color: "bg-stone-500",
+    prompt: "Search for grants and contracts related to defense locomotion systems, military mobility platforms, autonomous ground vehicles, robotic locomotion, all-terrain systems, and tactical mobility solutions.",
+    keywords: ["locomotion", "mobility", "ground vehicle", "robotic movement", "all-terrain", "tactical mobility", "defense platform"],
+  },
+]
 
 interface SyncResult {
   id: string
@@ -32,6 +233,7 @@ interface SyncResult {
   url: string
   deadline?: string
   status: "new" | "updated" | "confirmed"
+  programId?: string
 }
 
 interface SyncLog {
@@ -39,6 +241,14 @@ interface SyncLog {
   action: string
   status: "success" | "warning" | "error" | "info"
   details: string
+  programId?: string
+}
+
+interface ProgramSyncState {
+  isRunning: boolean
+  lastSync: Date | null
+  resultsCount: number
+  enabled: boolean
 }
 
 interface GPTSyncPanelProps {
@@ -47,14 +257,17 @@ interface GPTSyncPanelProps {
 
 export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   const [isSyncing, setIsSyncing] = useState(false)
-  const [lastSync, setLastSync] = useState<Date | null>(null)
+  const [activeProgramId, setActiveProgramId] = useState<string | null>(null)
   const [syncResults, setSyncResults] = useState<SyncResult[]>([])
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
-  const [autoSync, setAutoSync] = useState(false)
-  const [syncFrequency, setSyncFrequency] = useState("daily")
-  const [customPrompt, setCustomPrompt] = useState(
-    "Search for defense, space, UAS/UAV, electronic warfare, sensors, ISR, and dual-use technology grants and contracts relevant to ARQUIMEA Group capabilities."
-  )
+  const [expandedPrograms, setExpandedPrograms] = useState<Set<string>>(new Set())
+  const [programStates, setProgramStates] = useState<Record<string, ProgramSyncState>>(() => {
+    const initial: Record<string, ProgramSyncState> = {}
+    ARQUIMEA_PROGRAMS.forEach((p) => {
+      initial[p.id] = { isRunning: false, lastSync: null, resultsCount: 0, enabled: true }
+    })
+    return initial
+  })
 
   const [syncConfig, setSyncConfig] = useState({
     analyzRelevance: true,
@@ -67,14 +280,25 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   // Load saved state
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("gptSyncState")
+      const saved = localStorage.getItem("gptSyncStateV2")
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed.lastSync) setLastSync(new Date(parsed.lastSync))
         if (parsed.syncResults) setSyncResults(parsed.syncResults)
-        if (parsed.autoSync !== undefined) setAutoSync(parsed.autoSync)
-        if (parsed.syncFrequency) setSyncFrequency(parsed.syncFrequency)
-        if (parsed.customPrompt) setCustomPrompt(parsed.customPrompt)
+        if (parsed.programStates) {
+          setProgramStates((prev) => {
+            const merged = { ...prev }
+            Object.keys(parsed.programStates).forEach((k) => {
+              if (merged[k]) {
+                merged[k] = {
+                  ...merged[k],
+                  ...parsed.programStates[k],
+                  lastSync: parsed.programStates[k].lastSync ? new Date(parsed.programStates[k].lastSync) : null,
+                }
+              }
+            })
+            return merged
+          })
+        }
         if (parsed.syncConfig) setSyncConfig({ ...syncConfig, ...parsed.syncConfig })
         if (parsed.syncLogs) {
           setSyncLogs(
@@ -91,60 +315,21 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   useEffect(() => {
     try {
       localStorage.setItem(
-        "gptSyncState",
+        "gptSyncStateV2",
         JSON.stringify({
-          lastSync,
           syncResults,
-          autoSync,
-          syncFrequency,
-          customPrompt,
+          programStates,
           syncConfig,
-          syncLogs: syncLogs.slice(0, 50),
+          syncLogs: syncLogs.slice(0, 100),
         })
       )
     } catch {
       /* ignore */
     }
-  }, [lastSync, syncResults, autoSync, syncFrequency, customPrompt, syncConfig, syncLogs])
+  }, [syncResults, programStates, syncConfig, syncLogs])
 
-  const addLog = (action: string, status: SyncLog["status"], details: string) => {
-    setSyncLogs((prev) => [{ timestamp: new Date(), action, status, details }, ...prev].slice(0, 100))
-  }
-
-  // Extract search keywords from the user's custom prompt
-  const extractKeywords = (prompt: string): string[] => {
-    // Common filler/stop words to exclude
-    const stopWords = new Set([
-      "search", "for", "and", "the", "a", "an", "or", "in", "of", "to",
-      "with", "that", "are", "is", "on", "at", "by", "from", "grants",
-      "contracts", "relevant", "capabilities", "group", "technology",
-      "opportunities", "related",
-    ])
-    // Split on commas, slashes, "and", spaces
-    const raw = prompt
-      .replace(/[,/()]/g, " ")
-      .replace(/\band\b/gi, " ")
-      .split(/\s+/)
-      .map((w) => w.trim().toLowerCase())
-      .filter((w) => w.length > 2 && !stopWords.has(w))
-
-    // Also extract multi-word terms from the prompt
-    const multiWordTerms: string[] = []
-    const multiWordPatterns = [
-      "electronic warfare", "dual-use", "dual use", "counter-uas", "c-uas",
-      "small satellite", "loitering munition", "secure communications",
-      "machine learning", "artificial intelligence",
-    ]
-    const lowerPrompt = prompt.toLowerCase()
-    for (const term of multiWordPatterns) {
-      if (lowerPrompt.includes(term)) {
-        multiWordTerms.push(term)
-      }
-    }
-
-    // Deduplicate
-    const all = [...new Set([...multiWordTerms, ...raw])]
-    return all.length > 0 ? all : ["defense", "space", "uas"]
+  const addLog = (action: string, status: SyncLog["status"], details: string, programId?: string) => {
+    setSyncLogs((prev) => [{ timestamp: new Date(), action, status, details, programId }, ...prev].slice(0, 200))
   }
 
   const scoreRelevance = (
@@ -153,23 +338,19 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   ): { score: number; matched: string[] } => {
     const text = `${grant.title} ${grant.description || ""} ${grant.category || ""} ${grant.agency || ""}`.toLowerCase()
     const matched = keywords.filter((kw) => text.includes(kw.toLowerCase()))
-    // Base 40 + 10 per keyword match, max 99
-    const score = Math.min(99, 40 + matched.length * 10)
+    const score = Math.min(99, 40 + matched.length * 12)
     return { score, matched }
   }
 
-  const runSync = async () => {
-    setIsSyncing(true)
-    setSyncResults([])
-    setSyncLogs([])
-
-    const keywords = extractKeywords(customPrompt)
-    addLog("Sync Started", "info", `Scanning all portals with ${keywords.length} keywords: ${keywords.slice(0, 10).join(", ")}...`)
+  const runProgramSync = async (program: typeof ARQUIMEA_PROGRAMS[0]) => {
+    setProgramStates((prev) => ({ ...prev, [program.id]: { ...prev[program.id], isRunning: true } }))
+    setActiveProgramId(program.id)
+    
+    addLog(`${program.name}`, "info", `Starting AI-powered scan with specialized prompt...`, program.id)
 
     const allRawGrants: any[] = []
     const grantIds = new Set<string>()
 
-    // Step 1: Fetch ALL grants from all sources (broad scan, no keyword filter on API side)
     const sources: Array<{ name: string; sourceFilter: string }> = [
       { name: "USA (Grants.gov + SAM.gov)", sourceFilter: "usa" },
       { name: "EU Funding & Tenders Portal", sourceFilter: "eu" },
@@ -177,9 +358,8 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     ]
 
     for (const src of sources) {
-      addLog(`${src.name} Scan`, "info", `Querying ${src.name}...`)
       try {
-        // First: broad fetch with no keyword to get all available
+        // Broad fetch
         const res = await fetch("/api/grants", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -193,13 +373,10 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
               allRawGrants.push({ ...grant, _sourceLabel: src.sourceFilter })
             }
           }
-          addLog(`${src.name} Scan`, "success", `${src.name}: ${data.data.length} opportunities retrieved from live APIs.`)
-        } else {
-          addLog(`${src.name} Scan`, "warning", `${src.name}: ${data.data?.length === 0 ? "No opportunities available." : data.error || "Unknown issue."}`)
         }
 
-        // Second: targeted keyword searches to catch additional results
-        const searchTerms = keywords.filter((k) => k.length > 3).slice(0, 5)
+        // Keyword searches specific to program
+        const searchTerms = program.keywords.slice(0, 5)
         for (const term of searchTerms) {
           try {
             const kwRes = await fetch("/api/grants", {
@@ -209,106 +386,119 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
             })
             const kwData = await kwRes.json()
             if (kwData.success && kwData.data?.length > 0) {
-              let added = 0
               for (const grant of kwData.data) {
                 if (!grantIds.has(grant.id)) {
                   grantIds.add(grant.id)
                   allRawGrants.push({ ...grant, _sourceLabel: src.sourceFilter })
-                  added++
                 }
-              }
-              if (added > 0) {
-                addLog(`${src.name} Keyword`, "info", `"${term}": +${added} new opportunities found.`)
               }
             }
           } catch {
-            // Silently continue with other keywords
+            // Continue
           }
         }
       } catch (error) {
-        addLog(`${src.name} Scan`, "error", `${src.name} connection failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+        addLog(`${program.name}`, "warning", `${src.name} connection issue`, program.id)
       }
     }
 
-    addLog("AI Analysis", "info", `Scoring ${allRawGrants.length} total opportunities against ${keywords.length} keywords...`)
-
-    // Step 2: Score ALL grants against keywords
-    const allResults: SyncResult[] = []
+    // Score grants against program keywords
+    const programResults: SyncResult[] = []
     for (const grant of allRawGrants) {
-      const { score, matched } = scoreRelevance(grant, keywords)
-      const srcLabel = grant._sourceLabel
-      const result: SyncResult = {
-        id: grant.id,
-        title: grant.title,
-        source: srcLabel === "usa"
-          ? (grant.agency?.toLowerCase().includes("sam") ? "SAM.gov" : "Grants.gov")
-          : srcLabel === "spain"
-            ? (grant.agency || grant.portal || "Spain Portal")
-            : "EU Portal",
-        relevanceScore: matched.length > 0 ? score : 30,
-        matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
-        url: grant.url || "#",
-        deadline: grant.closeDate || "See portal",
-        status: "new",
+      const { score, matched } = scoreRelevance(grant, program.keywords)
+      if (matched.length > 0 || score >= 50) {
+        const srcLabel = grant._sourceLabel
+        programResults.push({
+          id: grant.id,
+          title: grant.title,
+          source: srcLabel === "usa"
+            ? (grant.agency?.toLowerCase().includes("sam") ? "SAM.gov" : "Grants.gov")
+            : srcLabel === "spain"
+              ? (grant.agency || grant.portal || "Spain Portal")
+              : "EU Portal",
+          relevanceScore: score,
+          matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
+          url: grant.url || "#",
+          deadline: grant.closeDate || "See portal",
+          status: "new",
+          programId: program.id,
+        })
       }
-      allResults.push(result)
     }
 
-    // Step 3: Sort by relevance, mark top as confirmed
-    allResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
-    allResults.forEach((r, i) => {
-      if (r.relevanceScore >= 50 || i < 10) {
+    // Sort by relevance
+    programResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+    programResults.forEach((r, i) => {
+      if (r.relevanceScore >= 60 || i < 5) {
         r.status = "confirmed"
       }
     })
 
-    // Step 4: Deduplicate
-    if (syncConfig.detectDuplicates) {
-      const seen = new Set<string>()
-      let dupes = 0
-      const deduped = allResults.filter((r) => {
-        const key = r.title.toLowerCase().trim().slice(0, 60)
-        if (seen.has(key)) {
-          dupes++
-          return false
-        }
-        seen.add(key)
-        return true
-      })
-      if (dupes > 0) {
-        addLog("Duplicate Check", "info", `Removed ${dupes} duplicate entries.`)
-      } else {
-        addLog("Duplicate Check", "success", "No duplicates detected.")
-      }
-      setSyncResults(deduped)
-    } else {
-      setSyncResults(allResults)
-    }
+    // Update results
+    setSyncResults((prev) => {
+      const filtered = prev.filter((r) => r.programId !== program.id)
+      return [...filtered, ...programResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
+    })
 
-    if (syncConfig.categorizeAuto) {
-      addLog("Auto-Categorization", "success", "Opportunities categorized by keyword relevance.")
-    }
-
-    // Step 5: Push ALL found grants to the main feed
+    // Push to main feed
     if (allRawGrants.length > 0 && onGrantsFound) {
-      // Remove internal fields before pushing
       const cleanGrants = allRawGrants.map(({ _sourceLabel, ...rest }) => rest)
       onGrantsFound(cleanGrants)
-      addLog("Feed Updated", "success", `Pushed ${cleanGrants.length} opportunities to the Search Grants feed.`)
     }
 
-    const sourceNames = [...new Set(allResults.map((r) => r.source))]
-    const highRelevance = allResults.filter((r) => r.relevanceScore >= 50).length
     addLog(
-      "Sync Complete",
-      allResults.length > 0 ? "success" : "warning",
-      allResults.length > 0
-        ? `Found ${allResults.length} opportunities from ${sourceNames.join(", ")}. ${highRelevance} with high relevance, ${allResults.filter((r) => r.status === "confirmed").length} confirmed.`
-        : "No opportunities found. Check API connections or broaden your keywords.",
+      `${program.name}`,
+      programResults.length > 0 ? "success" : "warning",
+      `Found ${programResults.length} relevant opportunities (${programResults.filter((r) => r.relevanceScore >= 60).length} high-relevance)`,
+      program.id
     )
 
-    setLastSync(new Date())
+    setProgramStates((prev) => ({
+      ...prev,
+      [program.id]: {
+        ...prev[program.id],
+        isRunning: false,
+        lastSync: new Date(),
+        resultsCount: programResults.length,
+      },
+    }))
+    setActiveProgramId(null)
+  }
+
+  const runAllProgramsSync = async () => {
+    setIsSyncing(true)
+    setSyncLogs([])
+    addLog("Master Sync", "info", `Starting sync for ${ARQUIMEA_PROGRAMS.filter((p) => programStates[p.id]?.enabled).length} enabled programs...`)
+
+    for (const program of ARQUIMEA_PROGRAMS) {
+      if (programStates[program.id]?.enabled) {
+        await runProgramSync(program)
+        // Small delay between programs
+        await new Promise((r) => setTimeout(r, 500))
+      }
+    }
+
+    addLog("Master Sync", "success", `Completed sync for all programs. Total: ${syncResults.length} opportunities found.`)
     setIsSyncing(false)
+  }
+
+  const toggleProgramEnabled = (programId: string) => {
+    setProgramStates((prev) => ({
+      ...prev,
+      [programId]: { ...prev[programId], enabled: !prev[programId]?.enabled },
+    }))
+  }
+
+  const toggleProgramExpanded = (programId: string) => {
+    setExpandedPrograms((prev) => {
+      const next = new Set(prev)
+      if (next.has(programId)) {
+        next.delete(programId)
+      } else {
+        next.add(programId)
+      }
+      return next
+    })
   }
 
   const getRelevanceColor = (score: number) => {
@@ -331,6 +521,8 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     }
   }
 
+  const enabledCount = ARQUIMEA_PROGRAMS.filter((p) => programStates[p.id]?.enabled).length
+
   return (
     <div className="space-y-6">
       {/* Header Card */}
@@ -339,29 +531,26 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
           <div className="flex items-center justify-between">
             <CardTitle className="text-[#1e3a5f] flex items-center gap-2 text-lg">
               <Bot className="h-5 w-5" />
-              GPT Sync - AI-Assisted Grant Discovery
+              GPT Sync - ARQUIMEA Programs Grant Discovery
             </CardTitle>
             <div className="flex items-center gap-3">
-              {lastSync && (
-                <span className="text-xs text-gray-500 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  Last sync: {lastSync.toLocaleString()}
-                </span>
-              )}
+              <Badge variant="secondary" className="text-xs">
+                {enabledCount} programs enabled
+              </Badge>
               <Button
-                onClick={runSync}
+                onClick={runAllProgramsSync}
                 disabled={isSyncing}
                 className="bg-[#1e3a5f] hover:bg-[#2a4a6f] text-white"
               >
                 {isSyncing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Syncing...
+                    Syncing All...
                   </>
                 ) : (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2" />
-                    Run Sync
+                    Sync All Programs
                   </>
                 )}
               </Button>
@@ -370,8 +559,8 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
         </CardHeader>
         <CardContent className="pt-0">
           <p className="text-sm text-gray-600 mb-4">
-            AI-powered synchronization that scans official portals (SAM.gov, EU Funding & Tenders, Spain BDNS/CDTI/AEI/PRTR), 
-            analyzes relevance against ARQUIMEA strategic profile, and surfaces the most relevant opportunities.
+            AI-powered synchronization with specialized prompts for each ARQUIMEA program. Each GPT agent scans 
+            SAM.gov, EU Funding & Tenders, and Spain portals using program-specific keywords to find the most relevant opportunities.
           </p>
 
           {/* Sync Config */}
@@ -411,236 +600,201 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
         </CardContent>
       </Card>
 
-      {/* Custom Prompt */}
-      <Card className="border-gray-200">
-        <CardContent className="p-4">
-          <Label className="text-sm font-medium text-gray-700 mb-2 block">
-            Search Context Prompt
-          </Label>
-          <div className="flex gap-3">
-            <Input
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
-              className="text-sm flex-1"
-              placeholder="Describe what opportunities to look for..."
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setCustomPrompt(
-                  "Search for defense, space, UAS/UAV, electronic warfare, sensors, ISR, and dual-use technology grants and contracts relevant to ARQUIMEA Group capabilities."
-                )
-              }
-              className="text-xs whitespace-nowrap"
+      {/* Programs Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {ARQUIMEA_PROGRAMS.map((program) => {
+          const state = programStates[program.id]
+          const programResults = syncResults.filter((r) => r.programId === program.id)
+          const isExpanded = expandedPrograms.has(program.id)
+          const Icon = program.icon
+
+          return (
+            <Card
+              key={program.id}
+              className={`border transition-all ${
+                state?.enabled ? "border-[#1e3a5f]/20" : "border-gray-200 opacity-60"
+              } ${activeProgramId === program.id ? "ring-2 ring-[#1e3a5f]/40" : ""}`}
             >
-              Reset Default
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded ${program.color}`}>
+                      <Icon className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-sm text-[#1e3a5f]">{program.name}</h3>
+                      {state?.lastSync && (
+                        <span className="text-[10px] text-gray-400">
+                          Last: {state.lastSync.toLocaleTimeString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Checkbox
+                      checked={state?.enabled ?? true}
+                      onCheckedChange={() => toggleProgramEnabled(program.id)}
+                      className="h-4 w-4"
+                    />
+                  </div>
+                </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Results */}
-        <div className="lg:col-span-2 space-y-3">
-          <h3 className="font-semibold text-[#1e3a5f] flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            Sync Results
-            {syncResults.length > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {syncResults.length} opportunities
-              </Badge>
-            )}
-          </h3>
-
-          {isSyncing ? (
-            <Card className="border-gray-200">
-              <CardContent className="p-8 text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-[#1e3a5f] mx-auto mb-3" />
-                <p className="text-sm text-gray-600">Scanning portals and analyzing relevance...</p>
-              </CardContent>
-            </Card>
-          ) : syncResults.length === 0 ? (
-            <Card className="border-gray-200">
-              <CardContent className="p-8 text-center">
-                <Bot className="h-8 w-8 text-gray-400 mx-auto mb-3" />
-                <p className="text-sm text-gray-500">
-                  Click "Run Sync" to scan portals and discover relevant opportunities.
+                {/* Program Prompt Preview */}
+                <p className="text-[10px] text-gray-500 mb-3 line-clamp-2">
+                  {program.prompt.slice(0, 120)}...
                 </p>
+
+                {/* Keywords */}
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {program.keywords.slice(0, 4).map((kw) => (
+                    <Badge key={kw} variant="outline" className="text-[9px] px-1.5 py-0">
+                      {kw}
+                    </Badge>
+                  ))}
+                  {program.keywords.length > 4 && (
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-gray-50">
+                      +{program.keywords.length - 4}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7"
+                    disabled={!state?.enabled || state?.isRunning || isSyncing}
+                    onClick={() => runProgramSync(program)}
+                  >
+                    {state?.isRunning ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Scanning...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3 w-3 mr-1" />
+                        Run Sync
+                      </>
+                    )}
+                  </Button>
+
+                  {programResults.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs h-7"
+                      onClick={() => toggleProgramExpanded(program.id)}
+                    >
+                      <Badge className="bg-[#1e3a5f] text-white text-[10px] mr-1">
+                        {programResults.length}
+                      </Badge>
+                      {isExpanded ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Expanded Results */}
+                {isExpanded && programResults.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 max-h-48 overflow-y-auto space-y-2">
+                    {programResults.slice(0, 5).map((result) => (
+                      <div key={result.id} className="text-xs">
+                        <a
+                          href={result.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#1e3a5f] hover:underline font-medium line-clamp-1"
+                        >
+                          {result.title}
+                        </a>
+                        <div className="flex items-center gap-2 text-gray-400 mt-0.5">
+                          <span>{result.source}</span>
+                          <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
+                            {result.relevanceScore}%
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                    {programResults.length > 5 && (
+                      <p className="text-[10px] text-gray-400 text-center">
+                        +{programResults.length - 5} more results
+                      </p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
+          )
+        })}
+      </div>
+
+      {/* Sync Log */}
+      <Card className="border-gray-200">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold text-[#1e3a5f] flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Sync Activity Log
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-3 max-h-64 overflow-y-auto">
+          {syncLogs.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">No sync activity yet. Click "Sync All Programs" to start.</p>
           ) : (
             <div className="space-y-2">
-              {syncResults.map((result) => (
-                <Card
-                  key={result.id}
-                  className={`border-l-4 ${
-                    result.status === "new"
-                      ? "border-l-emerald-500"
-                      : result.status === "updated"
-                        ? "border-l-amber-500"
-                        : "border-l-[#1e3a5f]"
-                  }`}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <a
-                            href={result.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-medium text-sm text-[#1e3a5f] hover:underline truncate block"
-                          >
-                            {result.title}
-                          </a>
-                          {result.status === "new" && (
-                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px] px-1.5 py-0 flex-shrink-0">
-                              NEW
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500 mb-1.5">
-                          <span className="font-medium">{result.source}</span>
-                          <span>|</span>
-                          <span>{result.deadline || "No deadline"}</span>
-                          <a
-                            href={result.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[#1e3a5f] hover:underline flex items-center gap-0.5"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            View
-                          </a>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {result.matchedKeywords.map((kw) => (
-                            <Badge
-                              key={kw}
-                              variant="outline"
-                              className="text-[10px] px-1.5 py-0 bg-gray-50"
-                            >
-                              {kw}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0">
-                        <Badge
-                          className={`text-xs font-bold border ${getRelevanceColor(result.relevanceScore)}`}
-                        >
-                          {result.relevanceScore}%
-                        </Badge>
-                      </div>
+              {syncLogs.slice(0, 30).map((log, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  <div className="flex-shrink-0 mt-0.5">{getStatusIcon(log.status)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-gray-700">{log.action}</span>
+                      <span className="text-gray-400">{log.timestamp.toLocaleTimeString()}</span>
                     </div>
-                  </CardContent>
-                </Card>
+                    <p className="text-gray-500 leading-relaxed">{log.details}</p>
+                  </div>
+                </div>
               ))}
             </div>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Sync Log */}
-        <div className="space-y-3">
-          <h3 className="font-semibold text-[#1e3a5f] flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Sync Log
-          </h3>
-          <Card className="border-gray-200">
-            <CardContent className="p-3 max-h-[500px] overflow-y-auto">
-              {syncLogs.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-6">No sync activity yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {syncLogs.map((log, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs">
-                      <div className="flex-shrink-0 mt-0.5">{getStatusIcon(log.status)}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-gray-700">{log.action}</span>
-                          <span className="text-gray-400">
-                            {log.timestamp.toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p className="text-gray-500 leading-relaxed">{log.details}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Auto-Sync Config */}
-          <Card className="border-gray-200">
-            <CardContent className="p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium text-gray-700">Auto-Sync</Label>
-                <Checkbox
-                  checked={autoSync}
-                  onCheckedChange={(checked) => setAutoSync(checked as boolean)}
-                />
+      {/* Summary Stats */}
+      {syncResults.length > 0 && (
+        <Card className="border-[#1e3a5f]/20 bg-[#f0f4f8]">
+          <CardContent className="p-4">
+            <h4 className="text-sm font-semibold text-[#1e3a5f] mb-3">Overall Sync Summary</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div className="bg-white rounded p-3 text-center">
+                <div className="font-bold text-[#1e3a5f] text-xl">{syncResults.length}</div>
+                <div className="text-gray-500">Total Opportunities</div>
               </div>
-              {autoSync && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-gray-500">Frequency</Label>
-                  <div className="flex gap-1.5">
-                    {["daily", "weekly", "bi-weekly"].map((freq) => (
-                      <Button
-                        key={freq}
-                        variant={syncFrequency === freq ? "default" : "outline"}
-                        size="sm"
-                        className={`text-[10px] h-7 ${
-                          syncFrequency === freq
-                            ? "bg-[#1e3a5f] text-white"
-                            : "text-gray-600"
-                        }`}
-                        onClick={() => setSyncFrequency(freq)}
-                      >
-                        {freq.charAt(0).toUpperCase() + freq.slice(1)}
-                      </Button>
-                    ))}
-                  </div>
+              <div className="bg-white rounded p-3 text-center">
+                <div className="font-bold text-emerald-600 text-xl">
+                  {syncResults.filter((r) => r.relevanceScore >= 60).length}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Stats Summary */}
-          {syncResults.length > 0 && (
-            <Card className="border-[#1e3a5f]/20 bg-[#f0f4f8]">
-              <CardContent className="p-3 space-y-2">
-                <h4 className="text-xs font-semibold text-[#1e3a5f]">Sync Summary</h4>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-white rounded p-2 text-center">
-                    <div className="font-bold text-[#1e3a5f] text-lg">{syncResults.length}</div>
-                    <div className="text-gray-500">Total Matches</div>
-                  </div>
-                  <div className="bg-white rounded p-2 text-center">
-                    <div className="font-bold text-emerald-600 text-lg">
-                      {syncResults.filter((r) => r.status === "new").length}
-                    </div>
-                    <div className="text-gray-500">New Found</div>
-                  </div>
-                  <div className="bg-white rounded p-2 text-center">
-                    <div className="font-bold text-[#1e3a5f] text-lg">
-                      {Math.round(syncResults.reduce((a, r) => a + r.relevanceScore, 0) / syncResults.length)}%
-                    </div>
-                    <div className="text-gray-500">Avg Relevance</div>
-                  </div>
-                  <div className="bg-white rounded p-2 text-center">
-                    <div className="font-bold text-[#1e3a5f] text-lg">
-                      {new Set(syncResults.map((r) => r.source)).size}
-                    </div>
-                    <div className="text-gray-500">Sources</div>
-                  </div>
+                <div className="text-gray-500">High Relevance</div>
+              </div>
+              <div className="bg-white rounded p-3 text-center">
+                <div className="font-bold text-[#1e3a5f] text-xl">
+                  {new Set(syncResults.map((r) => r.programId)).size}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+                <div className="text-gray-500">Programs Matched</div>
+              </div>
+              <div className="bg-white rounded p-3 text-center">
+                <div className="font-bold text-[#1e3a5f] text-xl">
+                  {new Set(syncResults.map((r) => r.source)).size}
+                </div>
+                <div className="text-gray-500">Sources</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

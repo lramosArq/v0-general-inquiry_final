@@ -13,6 +13,7 @@ export interface UserAlert {
   frequency: "immediate" | "daily" | "weekly"
   createdAt: string
   lastTriggered?: string
+  customEmail?: string
 }
 
 export interface User {

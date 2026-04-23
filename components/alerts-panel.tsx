@@ -41,6 +41,8 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [frequency, setFrequency] = useState<"immediate" | "daily" | "weekly">("daily")
   const [message, setMessage] = useState({ type: "", text: "" })
+  const [customEmail, setCustomEmail] = useState(user.email)
+  const [useCustomEmail, setUseCustomEmail] = useState(false)
 
   const userService = UserService.getInstance()
 
@@ -54,11 +56,13 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
     setMessage({ type: "", text: "" })
 
     try {
+      const targetEmail = useCustomEmail && customEmail ? customEmail : user.email
       const result = await userService.addAlert(user.id, {
         name: alertName,
         filters: currentFilters,
         emailNotifications,
         frequency,
+        customEmail: useCustomEmail ? customEmail : undefined,
       })
 
       if (result.success) {
@@ -164,12 +168,13 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
         return
       }
 
-      // Send email via API
+      // Send email via API - use custom email if defined
+      const targetEmail = (alert as any).customEmail || user.email
       const response = await fetch("/api/send-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: user.email,
+          to: targetEmail,
           alertName: alert.name,
           grants: matchingGrants.slice(0, 10), // Limit to 10 grants per email
           frequency: alert.frequency,
@@ -179,7 +184,7 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       const result = await response.json()
 
       if (result.success) {
-        setMessage({ type: "success", text: `Alert sent to ${user.email}!` })
+        setMessage({ type: "success", text: `Alert sent to ${targetEmail}!` })
 
         // Update last triggered
         await userService.updateAlert(user.id, alert.id, { lastTriggered: new Date().toISOString() })
@@ -262,6 +267,12 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
                       <span>Created: {new Date(alert.createdAt).toLocaleDateString()}</span>
                       {alert.lastTriggered && (
                         <span>Last sent: {new Date(alert.lastTriggered).toLocaleDateString()}</span>
+                      )}
+                      {(alert as any).customEmail && (
+                        <span className="flex items-center gap-1 text-blue-600">
+                          <Mail className="h-3 w-3" />
+                          {(alert as any).customEmail}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -356,15 +367,53 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
               </Select>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="email-notifications"
-                checked={emailNotifications}
-                onCheckedChange={(checked) => setEmailNotifications(checked as boolean)}
-              />
-              <Label htmlFor="email-notifications" className="text-sm">
-                Send email notifications to {user.email}
-              </Label>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="email-notifications"
+                  checked={emailNotifications}
+                  onCheckedChange={(checked) => setEmailNotifications(checked as boolean)}
+                />
+                <Label htmlFor="email-notifications" className="text-sm">
+                  Send email notifications
+                </Label>
+              </div>
+
+              {emailNotifications && (
+                <div className="ml-6 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="use-custom-email"
+                      checked={useCustomEmail}
+                      onCheckedChange={(checked) => setUseCustomEmail(checked as boolean)}
+                    />
+                    <Label htmlFor="use-custom-email" className="text-sm">
+                      Use a different email address
+                    </Label>
+                  </div>
+
+                  {useCustomEmail ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="custom-email" className="text-xs text-gray-500">
+                        Send alerts to:
+                      </Label>
+                      <Input
+                        id="custom-email"
+                        type="email"
+                        placeholder="your@email.com"
+                        value={customEmail}
+                        onChange={(e) => setCustomEmail(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 flex items-center gap-1">
+                      <Mail className="h-3 w-3" />
+                      Alerts will be sent to: <strong>{user.email}</strong>
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {message.text && (

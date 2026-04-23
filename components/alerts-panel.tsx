@@ -43,6 +43,9 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
   const [message, setMessage] = useState({ type: "", text: "" })
   const [customEmail, setCustomEmail] = useState(user.email)
   const [useCustomEmail, setUseCustomEmail] = useState(false)
+  const [testMode, setTestMode] = useState(true) // Enable test mode by default
+  const [testEmail, setTestEmail] = useState("")
+  const [isSendingTest, setIsSendingTest] = useState(false)
 
   const userService = UserService.getInstance()
 
@@ -93,6 +96,72 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       if (updatedUser) {
         onUserUpdate(updatedUser)
       }
+    }
+  }
+
+  // Send test email function - works without Resend domain verification
+  const handleSendTestEmail = async () => {
+    const targetEmail = testEmail || user.email
+    if (!targetEmail) {
+      setMessage({ type: "error", text: "Please enter an email address" })
+      return
+    }
+
+    setIsSendingTest(true)
+    setMessage({ type: "", text: "" })
+
+    try {
+      // Get sample grants for test
+      const sampleGrants = grants.slice(0, 3).map(g => ({
+        title: g.title || "Sample Grant",
+        agency: g.agency || "Sample Agency", 
+        deadline: g.closeDate || "2026-12-31",
+        amount: g.awardCeiling || "$100,000",
+        url: g.url || "#"
+      }))
+
+      if (sampleGrants.length === 0) {
+        sampleGrants.push({
+          title: "Test Grant Opportunity",
+          agency: "Test Agency",
+          deadline: "2026-12-31",
+          amount: "$50,000",
+          url: "#"
+        })
+      }
+
+      // Use EmailJS endpoint for test (no domain restrictions)
+      const response = await fetch("/api/send-emailjs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: targetEmail,
+          subject: "Test Alert - ArquiAlert Grant Notifications",
+          content: `This is a test email from ArquiAlert.\n\nYou have ${sampleGrants.length} matching grant opportunities:\n\n${sampleGrants.map((g, i) => `${i + 1}. ${g.title}\n   Agency: ${g.agency}\n   Deadline: ${g.deadline}\n   Amount: ${g.amount}`).join("\n\n")}\n\nThis confirms your email alerts are working correctly.`,
+          tenderData: {
+            titulo: sampleGrants[0]?.title,
+            organismo: sampleGrants[0]?.agency,
+            fechaLimite: sampleGrants[0]?.deadline,
+            presupuesto: sampleGrants[0]?.amount,
+          }
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setMessage({ 
+          type: "success", 
+          text: `Test email sent to ${targetEmail}! (Method: ${result.method})` 
+        })
+      } else {
+        setMessage({ type: "error", text: result.message || "Failed to send test email" })
+      }
+    } catch (error) {
+      console.error("[v0] Test email error:", error)
+      setMessage({ type: "error", text: "Failed to send test email" })
+    } finally {
+      setIsSendingTest(false)
     }
   }
 
@@ -239,6 +308,55 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
           New Alert
         </Button>
       </div>
+
+      {/* Test Email Section */}
+      <Card className="border-blue-200 bg-blue-50/50">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-medium text-blue-800 flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Test Email Alerts
+            </h4>
+            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+              Test Mode
+            </Badge>
+          </div>
+          <p className="text-sm text-blue-700 mb-3">
+            Send a test email to verify your alerts are working. This bypasses Resend domain restrictions.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              placeholder="Enter your email (e.g., lramos@arquimea.com)"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              className="flex-1 bg-white"
+            />
+            <Button
+              onClick={handleSendTestEmail}
+              disabled={isSendingTest}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isSendingTest ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-1" />
+                  Send Test
+                </>
+              )}
+            </Button>
+          </div>
+          {!testEmail && (
+            <p className="text-xs text-blue-600 mt-2">
+              Leave empty to send to your account email: {user.email}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {message.text && (
         <div

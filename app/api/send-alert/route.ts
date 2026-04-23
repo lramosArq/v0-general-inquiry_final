@@ -7,8 +7,23 @@ export async function POST(request: Request) {
   try {
     const { to, alertName, grants, frequency } = await request.json()
 
+    console.log("[v0] Send Alert API called")
+    console.log("[v0] Recipient:", to)
+    console.log("[v0] Alert name:", alertName)
+    console.log("[v0] Grants count:", grants?.length)
+    console.log("[v0] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY)
+
     if (!to || !grants || grants.length === 0) {
+      console.log("[v0] Missing required fields - to:", !!to, "grants:", grants?.length)
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      console.log("[v0] RESEND_API_KEY not configured")
+      return NextResponse.json({ 
+        error: "Email service not configured. Please add RESEND_API_KEY to environment variables.",
+        details: "Resend API key is missing"
+      }, { status: 500 })
     }
 
     const grantsHTML = grants
@@ -105,11 +120,24 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error("[v0] Error sending email:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      // Check for common Resend errors
+      const errorMessage = error.message || "Unknown error"
+      let userFriendlyMessage = errorMessage
+      
+      if (errorMessage.includes("not verified") || errorMessage.includes("verify")) {
+        userFriendlyMessage = `Cannot send to ${to}. With Resend's free tier (onboarding@resend.dev), you can only send to your verified email address. To send to other emails, you need to verify a custom domain in Resend.`
+      }
+      
+      return NextResponse.json({ 
+        error: userFriendlyMessage, 
+        details: errorMessage,
+        suggestion: "Verify your domain in Resend or use the email associated with your Resend account"
+      }, { status: 500 })
     }
 
-    console.log("[v0] Email sent successfully:", data)
-    return NextResponse.json({ success: true, data })
+    console.log("[v0] Email sent successfully to:", to)
+    console.log("[v0] Email data:", data)
+    return NextResponse.json({ success: true, data, sentTo: to })
   } catch (error) {
     console.error("[v0] Error in send-alert route:", error)
     return NextResponse.json({ error: "Failed to send email" }, { status: 500 })

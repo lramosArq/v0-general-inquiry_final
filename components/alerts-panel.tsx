@@ -193,7 +193,16 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
           onUserUpdate(updatedUser)
         }
       } else {
-        setMessage({ type: "error", text: result.error || "Failed to send alert" })
+        console.error("[v0] Send alert error:", result)
+        // Show detailed error message
+        let errorMsg = result.error || "Failed to send alert"
+        if (result.details) {
+          errorMsg += ` (${result.details})`
+        }
+        if (result.suggestion) {
+          errorMsg += `. ${result.suggestion}`
+        }
+        setMessage({ type: "error", text: errorMsg })
       }
     } catch (error) {
       console.error("[v0] Error sending alert:", error)
@@ -405,6 +414,10 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
                         onChange={(e) => setCustomEmail(e.target.value)}
                         className="h-9"
                       />
+                      <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded mt-1">
+                        Note: With Resend free tier, emails can only be sent to the verified email address in your Resend account. 
+                        To send to other addresses, verify a custom domain in Resend.
+                      </p>
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500 flex items-center gap-1">

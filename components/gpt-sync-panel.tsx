@@ -1281,30 +1281,46 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
                       )}
                     </div>
 
-                    {/* Expanded Results */}
+                    {/* Expanded Results - Show ALL */}
                     {isExpanded && searchResults.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 max-h-48 overflow-y-auto space-y-2">
-                        {searchResults.slice(0, 5).map((result) => (
-                          <div key={result.id} className="text-xs">
-                            <a
-                              href={result.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-emerald-700 hover:underline font-medium line-clamp-1"
-                            >
-                              {result.title}
-                            </a>
-                            <div className="flex items-center gap-2 text-gray-400 mt-0.5">
-                              <span>{result.source}</span>
-                              <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
-                                {result.relevanceScore}%
-                              </Badge>
+                      <div className="mt-3 pt-3 border-t border-gray-100 max-h-[400px] overflow-y-auto space-y-2">
+                        {searchResults.map((result, idx) => (
+                          <div key={result.id} className="text-xs border-b border-gray-50 pb-2 last:border-0">
+                            <div className="flex items-start gap-2">
+                              <span className="text-gray-400 font-mono text-[10px] w-4">{idx + 1}</span>
+                              <div className="flex-1">
+                                <a
+                                  href={result.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-emerald-700 hover:underline font-medium block"
+                                >
+                                  {result.title}
+                                </a>
+                                <div className="flex items-center gap-2 text-gray-400 mt-1">
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                                    {result.source}
+                                  </Badge>
+                                  <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
+                                    {result.relevanceScore}%
+                                  </Badge>
+                                  {result.deadline && result.deadline !== "See portal" && (
+                                    <span className="text-[10px]">Deadline: {result.deadline}</span>
+                                  )}
+                                </div>
+                                {result.matchedKeywords.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {result.matchedKeywords.map((kw) => (
+                                      <span key={kw} className="text-[9px] text-emerald-600 bg-emerald-50 px-1 rounded">
+                                        {kw}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
-                        {searchResults.length > 5 && (
-                          <p className="text-[10px] text-gray-400 text-center">+{searchResults.length - 5} more</p>
-                        )}
                       </div>
                     )}
                   </div>
@@ -1422,32 +1438,46 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
                   )}
                 </div>
 
-                {/* Expanded Results */}
+                {/* Expanded Results - Show ALL */}
                 {isExpanded && programResults.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 max-h-48 overflow-y-auto space-y-2">
-                    {programResults.slice(0, 5).map((result) => (
-                      <div key={result.id} className="text-xs">
-                        <a
-                          href={result.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#1e3a5f] hover:underline font-medium line-clamp-1"
-                        >
-                          {result.title}
-                        </a>
-                        <div className="flex items-center gap-2 text-gray-400 mt-0.5">
-                          <span>{result.source}</span>
-                          <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
-                            {result.relevanceScore}%
-                          </Badge>
+                  <div className="mt-3 pt-3 border-t border-gray-100 max-h-[400px] overflow-y-auto space-y-2">
+                    {programResults.map((result, idx) => (
+                      <div key={result.id} className="text-xs border-b border-gray-50 pb-2 last:border-0">
+                        <div className="flex items-start gap-2">
+                          <span className="text-gray-400 font-mono text-[10px] w-4">{idx + 1}</span>
+                          <div className="flex-1">
+                            <a
+                              href={result.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#1e3a5f] hover:underline font-medium block"
+                            >
+                              {result.title}
+                            </a>
+                            <div className="flex items-center gap-2 text-gray-400 mt-1">
+                              <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                                {result.source}
+                              </Badge>
+                              <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
+                                {result.relevanceScore}%
+                              </Badge>
+                              {result.deadline && result.deadline !== "See portal" && (
+                                <span className="text-[10px]">Deadline: {result.deadline}</span>
+                              )}
+                            </div>
+                            {result.matchedKeywords.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {result.matchedKeywords.map((kw) => (
+                                  <span key={kw} className="text-[9px] text-emerald-600 bg-emerald-50 px-1 rounded">
+                                    {kw}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
-                    {programResults.length > 5 && (
-                      <p className="text-[10px] text-gray-400 text-center">
-                        +{programResults.length - 5} more results
-                      </p>
-                    )}
                   </div>
                 )}
               </CardContent>

@@ -10,13 +10,14 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X } from "lucide-react"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
 import { GPTSyncPanel } from "@/components/gpt-sync-panel"
 import { LoginScreen } from "@/components/login-screen"
 import { UserService, type User as UserType } from "@/lib/user-service"
+import { OpportunityClaimService, type OpportunityClaim } from "@/lib/opportunity-claim-service"
 
 interface Grant {
   id: string
@@ -51,6 +52,10 @@ export default function GrantsSearchPage() {
   // Interest feedback for training
   const [interestFeedback, setInterestFeedback] = useState<Record<string, "interested" | "not_interested">>({})
   const [feedbackStats, setFeedbackStats] = useState({ interested: 0, notInterested: 0 })
+
+  // Opportunity claims
+  const [opportunityClaims, setOpportunityClaims] = useState<OpportunityClaim[]>([])
+  const [showMyClaimsPanel, setShowMyClaimsPanel] = useState(false)
 
   // Search filters
   const [keyword, setKeyword] = useState("")
@@ -126,6 +131,10 @@ export default function GrantsSearchPage() {
         setFeedbackStats({ interested, notInterested })
       }
     } catch { /* ignore */ }
+
+    // Load opportunity claims
+    const claimService = OpportunityClaimService.getInstance()
+    setOpportunityClaims(claimService.getAllClaims())
   }, [])
 
   useEffect(() => {
@@ -358,8 +367,47 @@ export default function GrantsSearchPage() {
     userService.logout()
     setCurrentUser(null)
     setShowAlertsPanel(false)
+    setShowMyClaimsPanel(false)
     setGrants([])
     setFilteredGrants([])
+  }
+
+  // Handle claiming/releasing an opportunity
+  const handleClaimOpportunity = (opportunityId: string) => {
+    if (!currentUser) return
+    
+    const claimService = OpportunityClaimService.getInstance()
+    const existingClaim = claimService.getClaim(opportunityId)
+    
+    if (existingClaim && existingClaim.claimedBy.id === currentUser.id) {
+      // Release the claim
+      const result = claimService.releaseOpportunity(opportunityId, currentUser.id)
+      if (result.success) {
+        setOpportunityClaims(claimService.getAllClaims())
+      }
+    } else if (!existingClaim) {
+      // Claim the opportunity
+      const result = claimService.claimOpportunity(opportunityId, {
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        businessUnit: currentUser.businessUnit,
+      })
+      if (result.success) {
+        setOpportunityClaims(claimService.getAllClaims())
+      }
+    }
+  }
+
+  // Get claim info for an opportunity
+  const getClaimInfo = (opportunityId: string): OpportunityClaim | null => {
+    return opportunityClaims.find(c => c.opportunityId === opportunityId) || null
+  }
+
+  // Get user's claimed opportunities
+  const getUserClaims = (): OpportunityClaim[] => {
+    if (!currentUser) return []
+    return opportunityClaims.filter(c => c.claimedBy.id === currentUser.id)
   }
 
   const handleAuthSuccess = (user: UserType) => {
@@ -404,6 +452,15 @@ export default function GrantsSearchPage() {
               <p className="text-sm text-blue-200">DISCOVER. APPLY. SUCCEED.</p>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowMyClaimsPanel(!showMyClaimsPanel)}
+                className={`text-white hover:bg-white/10 ${showMyClaimsPanel ? "bg-white/20" : ""}`}
+              >
+                <Briefcase className="h-4 w-4 mr-2" />
+                Mis Oportunidades ({getUserClaims().length})
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -702,6 +759,7 @@ export default function GrantsSearchPage() {
                       <table className="w-full">
                         <thead className="bg-[#1e3a5f] text-white text-sm">
                           <tr>
+                            <th className="text-left p-3">Control</th>
                             <th className="text-left p-3">Opportunity Number</th>
                             <th className="text-left p-3">Title & Description</th>
                             <th className="text-left p-3">Agency</th>
@@ -715,13 +773,40 @@ export default function GrantsSearchPage() {
                         <tbody className="divide-y divide-gray-200">
                           {paginatedGrants.length === 0 ? (
                             <tr>
-                              <td colSpan={8} className="text-center py-8 text-gray-500">
+                              <td colSpan={9} className="text-center py-8 text-gray-500">
                                 No grants found matching your criteria
                               </td>
                             </tr>
                           ) : (
-                            paginatedGrants.map((grant) => (
-                              <tr key={grant.id} className="hover:bg-gray-50">
+                            paginatedGrants.map((grant) => {
+                              const claimInfo = getClaimInfo(grant.id)
+                              const isClaimedByMe = claimInfo?.claimedBy.id === currentUser?.id
+                              const isClaimedByOther = claimInfo && !isClaimedByMe
+                              
+                              return (
+                              <tr key={grant.id} className={`hover:bg-gray-50 ${isClaimedByMe ? "bg-emerald-50" : isClaimedByOther ? "bg-amber-50" : ""}`}>
+                                <td className="p-3">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <Checkbox
+                                      id={`claim-${grant.id}`}
+                                      checked={!!claimInfo}
+                                      disabled={isClaimedByOther}
+                                      onCheckedChange={() => handleClaimOpportunity(grant.id)}
+                                      className={isClaimedByMe ? "border-emerald-600 data-[state=checked]:bg-emerald-600" : isClaimedByOther ? "border-amber-600 data-[state=checked]:bg-amber-600" : ""}
+                                    />
+                                    {claimInfo && (
+                                      <div className="text-[10px] text-center max-w-[80px]">
+                                        {isClaimedByMe ? (
+                                          <span className="text-emerald-700 font-medium">Tu control</span>
+                                        ) : (
+                                          <span className="text-amber-700" title={claimInfo.claimedBy.email}>
+                                            {claimInfo.claimedBy.name.split(" ")[0]}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="p-3 text-sm font-mono text-[#1e3a5f]">{grant.opportunityNumber}</td>
                                 <td className="p-3 align-top">
                                   <a
@@ -821,7 +906,7 @@ export default function GrantsSearchPage() {
                                   </div>
                                 </td>
                               </tr>
-                            ))
+                            )})
                           )}
                         </tbody>
                       </table>
@@ -864,6 +949,123 @@ export default function GrantsSearchPage() {
           </div>
         )}
       </div>
+
+      {/* My Claims Panel */}
+      {showMyClaimsPanel && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
+          <div className="w-full max-w-lg bg-white h-full overflow-y-auto shadow-xl">
+            <div className="sticky top-0 bg-[#1e3a5f] text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Briefcase className="h-5 w-5" />
+                <h2 className="font-semibold">Mis Oportunidades en Control</h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowMyClaimsPanel(false)}
+                className="text-white hover:bg-white/10"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              {getUserClaims().length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <p>No tienes oportunidades en control</p>
+                  <p className="text-sm mt-2">Selecciona la casilla de control en cualquier oportunidad para tomarla</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Tienes <span className="font-semibold text-emerald-600">{getUserClaims().length}</span> oportunidades bajo tu control.
+                    Otros usuarios veran que estas trabajando en ellas.
+                  </p>
+                  
+                  {getUserClaims().map((claim) => {
+                    const grant = grants.find(g => g.id === claim.opportunityId)
+                    return (
+                      <Card key={claim.opportunityId} className="border-emerald-200 bg-emerald-50/50">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <a
+                                href={grant?.url || "#"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-[#1e3a5f] hover:underline text-sm"
+                              >
+                                {grant?.title || "Oportunidad no encontrada"}
+                              </a>
+                              <p className="text-xs text-gray-500 mt-1 font-mono">
+                                {grant?.opportunityNumber || claim.opportunityId}
+                              </p>
+                              {grant && (
+                                <div className="flex gap-2 mt-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {grant.agency}
+                                  </Badge>
+                                  <Badge
+                                    className={
+                                      grant.status === "Open"
+                                        ? "bg-green-100 text-green-800 text-xs"
+                                        : "bg-gray-100 text-gray-800 text-xs"
+                                    }
+                                  >
+                                    {grant.status}
+                                  </Badge>
+                                </div>
+                              )}
+                              <p className="text-xs text-gray-400 mt-2">
+                                Control tomado: {new Date(claim.claimedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleClaimOpportunity(claim.opportunityId)}
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200"
+                            >
+                              Liberar
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </>
+              )}
+              
+              {/* Show all claims from other users */}
+              {opportunityClaims.filter(c => c.claimedBy.id !== currentUser?.id).length > 0 && (
+                <div className="mt-6 pt-6 border-t">
+                  <h3 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Oportunidades de otros usuarios
+                  </h3>
+                  <div className="space-y-2">
+                    {opportunityClaims.filter(c => c.claimedBy.id !== currentUser?.id).map((claim) => {
+                      const grant = grants.find(g => g.id === claim.opportunityId)
+                      return (
+                        <div key={claim.opportunityId} className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                          <p className="text-sm font-medium text-gray-800 line-clamp-1">
+                            {grant?.title || claim.opportunityId}
+                          </p>
+                          <p className="text-xs text-amber-700 mt-1">
+                            Controlado por: <span className="font-medium">{claim.claimedBy.name}</span>
+                            <span className="text-amber-600 ml-1">({claim.claimedBy.businessUnit})</span>
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="bg-[#1e3a5f] text-white py-6 mt-8">

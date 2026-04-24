@@ -484,9 +484,61 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     grant: { title: string; description?: string; category?: string; agency?: string },
     keywords: string[],
   ): { score: number; matched: string[] } => {
-    const text = `${grant.title} ${grant.description || ""} ${grant.category || ""} ${grant.agency || ""}`.toLowerCase()
-    const matched = keywords.filter((kw) => text.includes(kw.toLowerCase()))
-    const score = Math.min(99, 40 + matched.length * 12)
+    const title = (grant.title || "").toLowerCase()
+    const description = (grant.description || "").toLowerCase()
+    const category = (grant.category || "").toLowerCase()
+    const agency = (grant.agency || "").toLowerCase()
+    const fullText = `${title} ${description} ${category} ${agency}`
+    
+    const matched: string[] = []
+    let score = 0
+    
+    // Check each keyword with weighted scoring
+    for (const kw of keywords) {
+      const kwLower = kw.toLowerCase()
+      
+      // Higher weight for title matches (most relevant)
+      if (title.includes(kwLower)) {
+        matched.push(kw)
+        score += 20
+      }
+      // Medium weight for description matches
+      else if (description.includes(kwLower)) {
+        matched.push(kw)
+        score += 12
+      }
+      // Lower weight for category/agency matches
+      else if (category.includes(kwLower) || agency.includes(kwLower)) {
+        matched.push(kw)
+        score += 8
+      }
+    }
+    
+    // Bonus for multiple keyword matches (compound relevance)
+    if (matched.length >= 3) score += 15
+    if (matched.length >= 5) score += 10
+    
+    // Check for ARQUIMEA-specific terms that indicate high relevance
+    const arquimeaBoostTerms = [
+      "defense", "defence", "military", "satellite", "space", "UAV", "drone", 
+      "autonomous", "robotics", "AI", "biosensor", "therapeutics", "propulsion",
+      "navigation", "quantum", "cryptography", "photonics", "neuromorphic"
+    ]
+    
+    for (const term of arquimeaBoostTerms) {
+      if (fullText.includes(term.toLowerCase()) && !matched.includes(term)) {
+        score += 5
+      }
+    }
+    
+    // Cap score at 99
+    score = Math.min(99, score)
+    
+    // Only return score if we have at least one keyword match
+    if (matched.length === 0) {
+      score = 0
+    }
+    
     return { score, matched }
   }
 
@@ -550,11 +602,16 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
 
-    // Score grants against program keywords
+    // Score grants against program keywords - STRICT filtering for ARQUIMEA relevance
     const programResults: SyncResult[] = []
+    const MIN_SCORE_THRESHOLD = 25  // Minimum score to be considered relevant
+    const MIN_KEYWORDS_MATCH = 1    // Must match at least 1 keyword
+    
     for (const grant of allRawGrants) {
       const { score, matched } = scoreRelevance(grant, program.keywords)
-      if (matched.length > 0 || score >= 50) {
+      
+      // Only include if score meets threshold AND has keyword matches
+      if (score >= MIN_SCORE_THRESHOLD && matched.length >= MIN_KEYWORDS_MATCH) {
         const srcLabel = grant._sourceLabel
         programResults.push({
           id: grant.id,
@@ -565,7 +622,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
               ? (grant.agency || grant.portal || "Spain Portal")
               : "EU Portal",
           relevanceScore: score,
-          matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
+          matchedKeywords: matched.slice(0, 5),
           url: grant.url || "#",
           deadline: grant.closeDate || "See portal",
           status: "new",
@@ -574,30 +631,39 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
 
-    // Sort by relevance
+    // Sort by relevance and mark high-relevance items
     programResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
-    programResults.forEach((r, i) => {
-      if (r.relevanceScore >= 60 || i < 5) {
+    
+    // Only keep top results to avoid noise
+    const maxResults = 20
+    const filteredResults = programResults.slice(0, maxResults)
+    
+    filteredResults.forEach((r) => {
+      // Mark as confirmed only if score is high enough
+      if (r.relevanceScore >= 50) {
         r.status = "confirmed"
       }
     })
 
-    // Update results
+    // Update results with filtered set
     setSyncResults((prev) => {
       const filtered = prev.filter((r) => r.programId !== program.id)
-      return [...filtered, ...programResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
+      return [...filtered, ...filteredResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
     })
 
-    // Push to main feed
-    if (allRawGrants.length > 0 && onGrantsFound) {
-      const cleanGrants = allRawGrants.map(({ _sourceLabel, ...rest }) => rest)
-      onGrantsFound(cleanGrants)
+    // Push only relevant grants to main feed
+    if (filteredResults.length > 0 && onGrantsFound) {
+      const relevantGrantIds = new Set(filteredResults.map(r => r.id))
+      const relevantGrants = allRawGrants
+        .filter(g => relevantGrantIds.has(g.id))
+        .map(({ _sourceLabel, ...rest }) => rest)
+      onGrantsFound(relevantGrants)
     }
 
     addLog(
       `${program.name}`,
-      programResults.length > 0 ? "success" : "warning",
-      `Found ${programResults.length} relevant opportunities (${programResults.filter((r) => r.relevanceScore >= 60).length} high-relevance)`,
+      filteredResults.length > 0 ? "success" : "warning",
+      `Found ${filteredResults.length} relevant opportunities (${filteredResults.filter((r) => r.relevanceScore >= 50).length} high-relevance)`,
       program.id
     )
 
@@ -607,7 +673,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
         ...prev[program.id],
         isRunning: false,
         lastSync: new Date(),
-        resultsCount: programResults.length,
+        resultsCount: filteredResults.length,
       },
     }))
     setActiveProgramId(null)
@@ -769,11 +835,16 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
 
-    // Score grants
+    // Score grants - STRICT filtering
     const customResults: SyncResult[] = []
+    const MIN_SCORE = 25
+    const MIN_MATCHES = 1
+    
     for (const grant of allRawGrants) {
       const { score, matched } = scoreRelevance(grant, search.keywords)
-      if (matched.length > 0 || score >= 50) {
+      
+      // Only include if meets thresholds
+      if (score >= MIN_SCORE && matched.length >= MIN_MATCHES) {
         const srcLabel = grant._sourceLabel
         customResults.push({
           id: grant.id,
@@ -784,7 +855,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
               ? (grant.agency || grant.portal || "Spain Portal")
               : "EU Portal",
           relevanceScore: score,
-          matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
+          matchedKeywords: matched.slice(0, 5),
           url: grant.url || "#",
           deadline: grant.closeDate || "See portal",
           status: "new",
@@ -793,9 +864,12 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
 
+    // Sort and limit results
     customResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
-    customResults.forEach((r, i) => {
-      if (r.relevanceScore >= 60 || i < 5) {
+    const filteredCustomResults = customResults.slice(0, 20)
+    
+    filteredCustomResults.forEach((r) => {
+      if (r.relevanceScore >= 50) {
         r.status = "confirmed"
       }
     })
@@ -803,26 +877,29 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     // Update results
     setSyncResults((prev) => {
       const filtered = prev.filter((r) => r.programId !== search.id)
-      return [...filtered, ...customResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
+      return [...filtered, ...filteredCustomResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
     })
 
     // Update custom search stats
     setCustomSearches((prev) =>
       prev.map((cs) =>
-        cs.id === search.id ? { ...cs, lastRun: new Date(), resultsCount: customResults.length } : cs
+        cs.id === search.id ? { ...cs, lastRun: new Date(), resultsCount: filteredCustomResults.length } : cs
       )
     )
 
-    // Push to main feed
-    if (allRawGrants.length > 0 && onGrantsFound) {
-      const cleanGrants = allRawGrants.map(({ _sourceLabel, ...rest }) => rest)
-      onGrantsFound(cleanGrants)
+    // Push to main feed - only relevant grants
+    if (filteredCustomResults.length > 0 && onGrantsFound) {
+      const relevantGrantIds = new Set(filteredCustomResults.map(r => r.id))
+      const relevantGrants = allRawGrants
+        .filter(g => relevantGrantIds.has(g.id))
+        .map(({ _sourceLabel, ...rest }) => rest)
+      onGrantsFound(relevantGrants)
     }
 
     addLog(
       `Custom: ${search.name}`,
-      customResults.length > 0 ? "success" : "warning",
-      `Found ${customResults.length} relevant opportunities (${customResults.filter((r) => r.relevanceScore >= 60).length} high-relevance)`,
+      filteredCustomResults.length > 0 ? "success" : "warning",
+      `Found ${filteredCustomResults.length} relevant opportunities (${filteredCustomResults.filter((r) => r.relevanceScore >= 50).length} high-relevance)`,
       search.id
     )
 

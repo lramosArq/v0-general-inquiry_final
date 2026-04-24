@@ -8,6 +8,7 @@ export interface UserAlert {
     statuses: string[]
     categories: string[]
     fundingInstruments: string[]
+    gptSyncPrograms?: string[] // IDs of selected GPT Sync programs
   }
   emailNotifications: boolean
   frequency: "immediate" | "daily" | "weekly"

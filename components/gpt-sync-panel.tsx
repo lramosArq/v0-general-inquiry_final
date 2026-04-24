@@ -42,6 +42,9 @@ import {
   Bell,
   BellOff,
   X,
+  Globe,
+  Flag,
+  Filter,
 } from "lucide-react"
 
 // Custom user-defined searches
@@ -385,6 +388,19 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   const [syncResults, setSyncResults] = useState<SyncResult[]>([])
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
   const [expandedPrograms, setExpandedPrograms] = useState<Set<string>>(new Set())
+  
+  // Filters for results display
+  const [sourceFilter, setSourceFilter] = useState({
+    all: true,
+    usa: false,
+    eu: false,
+    spain: false,
+  })
+  const [statusFilter, setStatusFilter] = useState({
+    all: true,
+    new: false,
+    confirmed: false,
+  })
   const [programStates, setProgramStates] = useState<Record<string, ProgramSyncState>>(() => {
     const initial: Record<string, ProgramSyncState> = {}
     ARQUIMEA_PROGRAMS.forEach((p) => {
@@ -930,6 +946,35 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       return next
     })
   }
+  
+  // Filter results based on source and status filters
+  const filterResults = (results: SyncResult[]) => {
+    return results.filter((result) => {
+      // Source filter
+      let sourceMatch = sourceFilter.all
+      if (!sourceFilter.all) {
+        const sourceLower = result.source.toLowerCase()
+        if (sourceFilter.usa && (sourceLower.includes("grants.gov") || sourceLower.includes("sam.gov") || sourceLower.includes("usa"))) {
+          sourceMatch = true
+        }
+        if (sourceFilter.eu && (sourceLower.includes("eu") || sourceLower.includes("horizon") || sourceLower.includes("europe"))) {
+          sourceMatch = true
+        }
+        if (sourceFilter.spain && (sourceLower.includes("spain") || sourceLower.includes("españa") || sourceLower.includes("cdti"))) {
+          sourceMatch = true
+        }
+      }
+      
+      // Status filter
+      let statusMatch = statusFilter.all
+      if (!statusFilter.all) {
+        if (statusFilter.new && result.status === "new") statusMatch = true
+        if (statusFilter.confirmed && result.status === "confirmed") statusMatch = true
+      }
+      
+      return sourceMatch && statusMatch
+    })
+  }
 
   const getRelevanceColor = (score: number) => {
     if (score >= 90) return "bg-emerald-100 text-emerald-800 border-emerald-200"
@@ -954,7 +999,101 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   const enabledCount = ARQUIMEA_PROGRAMS.filter((p) => programStates[p.id]?.enabled).length
 
   return (
-    <div className="space-y-6">
+    <div className="flex gap-6">
+      {/* Sidebar Filters */}
+      <div className="w-64 flex-shrink-0">
+        <Card className="sticky top-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Filter Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-6">
+            {/* Source Filter */}
+            <div>
+              <h3 className="font-medium text-sm mb-2 text-gray-700">Source</h3>
+              <div className="space-y-2">
+                {[
+                  { key: "all", label: "All Sources", icon: Globe },
+                  { key: "usa", label: "USA (Grants.gov / SAM.gov)", icon: Flag },
+                  { key: "eu", label: "EU (Horizon / Tenders)", icon: Globe },
+                  { key: "spain", label: "Spain (CDTI / Portals)", icon: Flag },
+                ].map(({ key, label, icon: Icon }) => (
+                  <div key={key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`gpt-source-${key}`}
+                      checked={sourceFilter[key as keyof typeof sourceFilter]}
+                      onCheckedChange={(checked) => {
+                        if (key === "all") {
+                          setSourceFilter({ all: true, usa: false, eu: false, spain: false })
+                        } else {
+                          setSourceFilter((prev) => ({
+                            all: false,
+                            usa: key === "usa" ? !!checked : prev.usa,
+                            eu: key === "eu" ? !!checked : prev.eu,
+                            spain: key === "spain" ? !!checked : prev.spain,
+                          }))
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`gpt-source-${key}`} className="text-sm flex items-center gap-1 cursor-pointer">
+                      <Icon className="h-3 w-3" />
+                      {label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div>
+              <h3 className="font-medium text-sm mb-2 text-gray-700">Status</h3>
+              <div className="space-y-2">
+                {[
+                  { key: "all", label: "All Status" },
+                  { key: "new", label: "New" },
+                  { key: "confirmed", label: "Confirmed (High Relevance)" },
+                ].map(({ key, label }) => (
+                  <div key={key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`gpt-status-${key}`}
+                      checked={statusFilter[key as keyof typeof statusFilter]}
+                      onCheckedChange={(checked) => {
+                        if (key === "all") {
+                          setStatusFilter({ all: true, new: false, confirmed: false })
+                        } else {
+                          setStatusFilter((prev) => ({
+                            all: false,
+                            new: key === "new" ? !!checked : prev.new,
+                            confirmed: key === "confirmed" ? !!checked : prev.confirmed,
+                          }))
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`gpt-status-${key}`} className="text-sm cursor-pointer">
+                      {label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Results Summary */}
+            <div className="pt-4 border-t">
+              <h3 className="font-medium text-sm mb-2 text-gray-700">Results Summary</h3>
+              <div className="space-y-1 text-xs text-gray-600">
+                <p>Total: <span className="font-semibold">{syncResults.length}</span> opportunities</p>
+                <p>Filtered: <span className="font-semibold">{filterResults(syncResults).length}</span> showing</p>
+                <p>High Relevance: <span className="font-semibold text-emerald-600">{syncResults.filter(r => r.status === "confirmed").length}</span></p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 space-y-6">
       {/* Header Card */}
       <Card className="border-[#1e3a5f]/20">
         <CardHeader className="pb-3">
@@ -1170,7 +1309,8 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {customSearches.map((search) => {
                 const syncState = customSyncStates[search.id]
-                const searchResults = syncResults.filter((r) => r.programId === search.id)
+                const allSearchResults = syncResults.filter((r) => r.programId === search.id)
+                const searchResults = filterResults(allSearchResults)
                 const isExpanded = expandedCustomSearches.has(search.id)
 
                 return (
@@ -1343,7 +1483,8 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {ARQUIMEA_PROGRAMS.map((program) => {
           const state = programStates[program.id]
-          const programResults = syncResults.filter((r) => r.programId === program.id)
+          const allProgramResults = syncResults.filter((r) => r.programId === program.id)
+          const programResults = filterResults(allProgramResults)
           const isExpanded = expandedPrograms.has(program.id)
           const Icon = program.icon
 
@@ -1523,24 +1664,24 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
             <h4 className="text-sm font-semibold text-[#1e3a5f] mb-3">Overall Sync Summary</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div className="bg-white rounded p-3 text-center">
-                <div className="font-bold text-[#1e3a5f] text-xl">{syncResults.length}</div>
-                <div className="text-gray-500">Total Opportunities</div>
+                <div className="font-bold text-[#1e3a5f] text-xl">{filterResults(syncResults).length}</div>
+                <div className="text-gray-500">Showing</div>
               </div>
               <div className="bg-white rounded p-3 text-center">
                 <div className="font-bold text-emerald-600 text-xl">
-                  {syncResults.filter((r) => r.relevanceScore >= 60).length}
+                  {filterResults(syncResults).filter((r) => r.relevanceScore >= 50).length}
                 </div>
                 <div className="text-gray-500">High Relevance</div>
               </div>
               <div className="bg-white rounded p-3 text-center">
                 <div className="font-bold text-[#1e3a5f] text-xl">
-                  {new Set(syncResults.map((r) => r.programId)).size}
+                  {new Set(filterResults(syncResults).map((r) => r.programId)).size}
                 </div>
                 <div className="text-gray-500">Programs Matched</div>
               </div>
               <div className="bg-white rounded p-3 text-center">
                 <div className="font-bold text-[#1e3a5f] text-xl">
-                  {new Set(syncResults.map((r) => r.source)).size}
+                  {new Set(filterResults(syncResults).map((r) => r.source)).size}
                 </div>
                 <div className="text-gray-500">Sources</div>
               </div>
@@ -1548,6 +1689,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   )
 }

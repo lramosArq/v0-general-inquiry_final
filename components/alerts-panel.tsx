@@ -41,6 +41,11 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [frequency, setFrequency] = useState<"immediate" | "daily" | "weekly">("daily")
   const [message, setMessage] = useState({ type: "", text: "" })
+  const [customEmail, setCustomEmail] = useState(user.email)
+  const [useCustomEmail, setUseCustomEmail] = useState(false)
+  const [testMode, setTestMode] = useState(true) // Enable test mode by default
+  const [testEmail, setTestEmail] = useState("")
+  const [isSendingTest, setIsSendingTest] = useState(false)
 
   const userService = UserService.getInstance()
 
@@ -54,11 +59,13 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
     setMessage({ type: "", text: "" })
 
     try {
+      const targetEmail = useCustomEmail && customEmail ? customEmail : user.email
       const result = await userService.addAlert(user.id, {
         name: alertName,
         filters: currentFilters,
         emailNotifications,
         frequency,
+        customEmail: useCustomEmail ? customEmail : undefined,
       })
 
       if (result.success) {
@@ -89,6 +96,83 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       if (updatedUser) {
         onUserUpdate(updatedUser)
       }
+    }
+  }
+
+  // Send test email function - uses same endpoint as alerts for consistent formatting
+  const handleSendTestEmail = async () => {
+    const targetEmail = testEmail || user.email
+    if (!targetEmail) {
+      setMessage({ type: "error", text: "Please enter an email address" })
+      return
+    }
+
+    setIsSendingTest(true)
+    setMessage({ type: "", text: "" })
+
+    try {
+      // Get sample grants for test - use real grants data with all fields
+      const sampleGrants = grants.slice(0, 5).map(g => ({
+        id: g.id,
+        title: g.title || "Sample Grant",
+        agency: g.agency || "Sample Agency", 
+        opportunityNumber: g.opportunityNumber || g.id,
+        status: g.status || "Open",
+        closeDate: g.closeDate || "2026-12-31",
+        postedDate: g.postedDate,
+        awardCeiling: g.awardCeiling,
+        fundingInstrument: g.fundingInstrument,
+        category: g.category,
+        description: g.description,
+        source: g.source || "usa",
+        url: g.url || "#"
+      }))
+
+      if (sampleGrants.length === 0) {
+        sampleGrants.push({
+          id: "test-001",
+          title: "Test Grant Opportunity - Horizon Europe Research",
+          agency: "European Commission",
+          opportunityNumber: "HORIZON-TEST-2026",
+          status: "Open",
+          closeDate: "2026-12-31",
+          postedDate: "2026-01-15",
+          awardCeiling: 500000,
+          fundingInstrument: "Grant",
+          category: "Research & Innovation",
+          description: "This is a test grant to verify your email alert system is working correctly. Real alerts will contain actual grant opportunities matching your filters.",
+          source: "eu",
+          url: "https://ec.europa.eu/info/funding-tenders"
+        })
+      }
+
+      // Use the same send-alert endpoint for consistent email formatting
+      const response = await fetch("/api/send-alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: targetEmail,
+          alertName: "Test Alert",
+          grants: sampleGrants,
+          frequency: "immediate"
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setMessage({ 
+          type: "success", 
+          text: `Test email sent to ${targetEmail}!` 
+        })
+      } else {
+        setMessage({ type: "error", text: result.error || result.message || "Failed to send test email" })
+      }
+    } catch (error) {
+      console.error("[v0] Test email error:", error)
+      setMessage({ type: "error", text: "Failed to send test email" })
+    } finally {
+      setIsSendingTest(false)
     }
   }
 
@@ -164,12 +248,13 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
         return
       }
 
-      // Send email via API
+      // Send email via API - use custom email if defined
+      const targetEmail = (alert as any).customEmail || user.email
       const response = await fetch("/api/send-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: user.email,
+          to: targetEmail,
           alertName: alert.name,
           grants: matchingGrants.slice(0, 10), // Limit to 10 grants per email
           frequency: alert.frequency,
@@ -179,7 +264,7 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       const result = await response.json()
 
       if (result.success) {
-        setMessage({ type: "success", text: `Alert sent to ${user.email}!` })
+        setMessage({ type: "success", text: `Alert sent to ${targetEmail}!` })
 
         // Update last triggered
         await userService.updateAlert(user.id, alert.id, { lastTriggered: new Date().toISOString() })
@@ -188,7 +273,16 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
           onUserUpdate(updatedUser)
         }
       } else {
-        setMessage({ type: "error", text: result.error || "Failed to send alert" })
+        console.error("[v0] Send alert error:", result)
+        // Show detailed error message
+        let errorMsg = result.error || "Failed to send alert"
+        if (result.details) {
+          errorMsg += ` (${result.details})`
+        }
+        if (result.suggestion) {
+          errorMsg += `. ${result.suggestion}`
+        }
+        setMessage({ type: "error", text: errorMsg })
       }
     } catch (error) {
       console.error("[v0] Error sending alert:", error)
@@ -226,6 +320,55 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
         </Button>
       </div>
 
+      {/* Test Email Section */}
+      <Card className="border-blue-200 bg-blue-50/50">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-medium text-blue-800 flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Test Email Alerts
+            </h4>
+            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+              Test Mode
+            </Badge>
+          </div>
+          <p className="text-sm text-blue-700 mb-3">
+            Send a test email to verify your alerts are working. This bypasses Resend domain restrictions.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              placeholder="Enter your email (e.g., lramos@arquimea.com)"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              className="flex-1 bg-white"
+            />
+            <Button
+              onClick={handleSendTestEmail}
+              disabled={isSendingTest}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isSendingTest ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-1" />
+                  Send Test
+                </>
+              )}
+            </Button>
+          </div>
+          {!testEmail && (
+            <p className="text-xs text-blue-600 mt-2">
+              Leave empty to send to your account email: {user.email}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {message.text && (
         <div
           className={`p-3 rounded-md text-sm ${
@@ -262,6 +405,12 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
                       <span>Created: {new Date(alert.createdAt).toLocaleDateString()}</span>
                       {alert.lastTriggered && (
                         <span>Last sent: {new Date(alert.lastTriggered).toLocaleDateString()}</span>
+                      )}
+                      {(alert as any).customEmail && (
+                        <span className="flex items-center gap-1 text-blue-600">
+                          <Mail className="h-3 w-3" />
+                          {(alert as any).customEmail}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -356,15 +505,57 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
               </Select>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="email-notifications"
-                checked={emailNotifications}
-                onCheckedChange={(checked) => setEmailNotifications(checked as boolean)}
-              />
-              <Label htmlFor="email-notifications" className="text-sm">
-                Send email notifications to {user.email}
-              </Label>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="email-notifications"
+                  checked={emailNotifications}
+                  onCheckedChange={(checked) => setEmailNotifications(checked as boolean)}
+                />
+                <Label htmlFor="email-notifications" className="text-sm">
+                  Send email notifications
+                </Label>
+              </div>
+
+              {emailNotifications && (
+                <div className="ml-6 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="use-custom-email"
+                      checked={useCustomEmail}
+                      onCheckedChange={(checked) => setUseCustomEmail(checked as boolean)}
+                    />
+                    <Label htmlFor="use-custom-email" className="text-sm">
+                      Use a different email address
+                    </Label>
+                  </div>
+
+                  {useCustomEmail ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="custom-email" className="text-xs text-gray-500">
+                        Send alerts to:
+                      </Label>
+                      <Input
+                        id="custom-email"
+                        type="email"
+                        placeholder="your@email.com"
+                        value={customEmail}
+                        onChange={(e) => setCustomEmail(e.target.value)}
+                        className="h-9"
+                      />
+                      <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded mt-1">
+                        Note: With Resend free tier, emails can only be sent to the verified email address in your Resend account. 
+                        To send to other addresses, verify a custom domain in Resend.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 flex items-center gap-1">
+                      <Mail className="h-3 w-3" />
+                      Alerts will be sent to: <strong>{user.email}</strong>
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {message.text && (

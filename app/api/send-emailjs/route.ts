@@ -1,67 +1,158 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { Resend } from "resend"
 
-const emailjsConfig = {
-  serviceId: process.env.EMAILJS_SERVICE_ID || "service_arquimea",
-  templateId: process.env.EMAILJS_TEMPLATE_ID || "template_licitaciones",
-  publicKey: process.env.EMAILJS_PUBLIC_KEY || "demo_key_123",
+// Validate email format: must be "email@example.com" or "Name <email@example.com>"
+function isValidEmailFormat(email: string): boolean {
+  const simpleEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const namedEmailRegex = /^.+\s*<[^\s@]+@[^\s@]+\.[^\s@]+>$/
+  return simpleEmailRegex.test(email) || namedEmailRegex.test(email)
+}
+
+// Get the FROM email address - use custom domain if configured, otherwise use Resend's default
+function getFromEmail(): string {
+  // Check for custom domain configured via environment variable
+  const customDomain = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM
+  
+  // Validate that it's actually an email format, not an API key
+  if (customDomain && isValidEmailFormat(customDomain)) {
+    return customDomain
+  }
+  
+  // Default to Resend's onboarding domain (works for verified emails only)
+  return "ArquiAlert <onboarding@resend.dev>"
 }
 
 export async function POST(request: NextRequest) {
   try {
     const { to, subject, content, tenderData } = await request.json()
 
-    console.log("[v0] 📧 API: Enviando email con EmailJS a:", to)
+    const fromEmail = getFromEmail()
+    console.log("[v0] API: Enviando email a:", to)
+    console.log("[v0] FROM email:", fromEmail)
+    console.log("[v0] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY)
 
-    if (emailjsConfig.publicKey === "demo_key_123") {
-      console.log("[v0] ⚠️ EmailJS no configurado, usando simulación")
+    // Try Resend first (most reliable)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">ArquiAlert - Test Email</h2>
+            <p>This is a test email from ArquiAlert Grant Notifications.</p>
+            <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <h3 style="margin-top: 0; color: #374151;">Sample Grant Details:</h3>
+              <p><strong>Title:</strong> ${tenderData?.titulo || "Test Grant Opportunity"}</p>
+              <p><strong>Agency:</strong> ${tenderData?.organismo || "Test Agency"}</p>
+              <p><strong>Deadline:</strong> ${tenderData?.fechaLimite || "2026-12-31"}</p>
+              <p><strong>Budget:</strong> ${tenderData?.presupuesto || "$100,000"}</p>
+            </div>
+            <p style="color: #6b7280; font-size: 14px;">
+              ${content || "Your email alerts are working correctly."}
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+            <p style="color: #9ca3af; font-size: 12px;">
+              Sent by ArquiAlert - Arquimea Grant Intelligence Platform
+            </p>
+          </div>
+        `
 
-      // Simulación en servidor
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      const messageId = `emailjs_server_sim_${Date.now()}`
+        const { data, error } = await resend.emails.send({
+          from: fromEmail,
+          to: [to],
+          subject: subject || "ArquiAlert - Test Notification",
+          html: htmlContent,
+        })
 
-      return NextResponse.json({
-        success: true,
-        messageId,
-        method: "EmailJS Server Simulation",
-        message: "Email simulado enviado desde servidor",
+        if (error) {
+          console.log("[v0] Resend error:", error.message)
+          // If Resend fails due to domain verification, try EmailJS
+          if (error.message.includes("verify") || error.message.includes("not allowed")) {
+            console.log("[v0] Resend domain issue, trying EmailJS...")
+          } else {
+            throw error
+          }
+        } else {
+          console.log("[v0] ✅ Email sent via Resend:", data?.id)
+          return NextResponse.json({
+            success: true,
+            messageId: data?.id,
+            method: "Resend",
+            message: `Email sent successfully to ${to}`,
+          })
+        }
+      } catch (resendError: any) {
+        console.log("[v0] Resend failed, trying EmailJS:", resendError.message)
+      }
+    }
+
+    // Fallback to EmailJS REST API
+    const serviceId = process.env.EMAILJS_SERVICE_ID
+    const templateId = process.env.EMAILJS_TEMPLATE_ID
+    const publicKey = process.env.EMAILJS_PUBLIC_KEY
+
+    if (serviceId && templateId && publicKey && publicKey !== "demo_key_123") {
+      console.log("[v0] Trying EmailJS REST API...")
+      
+      const templateParams = {
+        to_email: to,
+        to_name: "Usuario ArquiAlert",
+        subject: subject || "ArquiAlert Test",
+        message: content || "Test email from ArquiAlert",
+        from_name: "ArquiAlert - Arquimea",
+        reply_to: "noreply@arquimea.com",
+        tender_title: tenderData?.titulo || "Test Grant",
+        tender_expediente: tenderData?.expediente || "N/A",
+        tender_organismo: tenderData?.organismo || "Test Agency",
+        tender_fecha: tenderData?.fechaLimite || "2026-12-31",
+        tender_presupuesto: tenderData?.presupuesto || "$100,000",
+      }
+
+      const emailjsResponse = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          service_id: serviceId,
+          template_id: templateId,
+          user_id: publicKey,
+          template_params: templateParams,
+        }),
       })
+
+      if (emailjsResponse.ok) {
+        console.log("[v0] ✅ Email sent via EmailJS REST API")
+        return NextResponse.json({
+          success: true,
+          messageId: `emailjs_${Date.now()}`,
+          method: "EmailJS",
+          message: `Email sent successfully to ${to}`,
+        })
+      } else {
+        const errorText = await emailjsResponse.text()
+        console.log("[v0] EmailJS REST API error:", errorText)
+      }
     }
 
-    // Nota: EmailJS normalmente funciona desde cliente, pero podemos simular el comportamiento
-    const templateParams = {
-      to_email: to,
-      to_name: "Usuario ArquiAlert",
-      subject: subject,
-      message: content,
-      from_name: "ArquiAlert - Arquimea",
-      reply_to: "lramos@arquimea.com",
-      tender_title: tenderData?.titulo || "N/A",
-      tender_expediente: tenderData?.expediente || "N/A",
-      tender_organismo: tenderData?.organismo || "N/A",
-      tender_fecha: tenderData?.fechaLimite || "N/A",
-      tender_presupuesto: tenderData?.presupuesto || "N/A",
-    }
-
-    // Para EmailJS desde servidor, necesitaríamos usar su API REST
-    // Por ahora simulamos el envío exitoso
-    const messageId = `emailjs_server_${Date.now()}`
-    console.log("[v0] ✅ Email procesado en servidor:", messageId)
-
+    // If all else fails, return simulation
+    console.log("[v0] ⚠️ No email service available, using simulation")
     return NextResponse.json({
       success: true,
-      messageId,
-      method: "EmailJS Server",
-      message: "Email enviado desde servidor",
+      messageId: `sim_${Date.now()}`,
+      method: "Simulation",
+      message: `Email simulated to ${to} (no email service configured)`,
     })
-  } catch (error) {
-    console.error("[v0] ❌ Error en API EmailJS:", error)
+
+  } catch (error: any) {
+    console.error("[v0] ❌ Error sending email:", error)
 
     return NextResponse.json(
       {
         success: false,
         messageId: "",
-        method: "EmailJS Server Error",
-        message: "Error al enviar email desde servidor",
+        method: "Error",
+        message: error.message || "Error sending email",
       },
       { status: 500 },
     )

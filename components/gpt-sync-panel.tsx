@@ -42,6 +42,9 @@ import {
   Bell,
   BellOff,
   X,
+  Globe,
+  Flag,
+  Filter,
 } from "lucide-react"
 
 // Custom user-defined searches
@@ -385,6 +388,19 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   const [syncResults, setSyncResults] = useState<SyncResult[]>([])
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
   const [expandedPrograms, setExpandedPrograms] = useState<Set<string>>(new Set())
+  
+  // Filters for results display
+  const [sourceFilter, setSourceFilter] = useState({
+    all: true,
+    usa: false,
+    eu: false,
+    spain: false,
+  })
+  const [statusFilter, setStatusFilter] = useState({
+    all: true,
+    new: false,
+    confirmed: false,
+  })
   const [programStates, setProgramStates] = useState<Record<string, ProgramSyncState>>(() => {
     const initial: Record<string, ProgramSyncState> = {}
     ARQUIMEA_PROGRAMS.forEach((p) => {
@@ -484,9 +500,61 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     grant: { title: string; description?: string; category?: string; agency?: string },
     keywords: string[],
   ): { score: number; matched: string[] } => {
-    const text = `${grant.title} ${grant.description || ""} ${grant.category || ""} ${grant.agency || ""}`.toLowerCase()
-    const matched = keywords.filter((kw) => text.includes(kw.toLowerCase()))
-    const score = Math.min(99, 40 + matched.length * 12)
+    const title = (grant.title || "").toLowerCase()
+    const description = (grant.description || "").toLowerCase()
+    const category = (grant.category || "").toLowerCase()
+    const agency = (grant.agency || "").toLowerCase()
+    const fullText = `${title} ${description} ${category} ${agency}`
+    
+    const matched: string[] = []
+    let score = 0
+    
+    // Check each keyword with weighted scoring
+    for (const kw of keywords) {
+      const kwLower = kw.toLowerCase()
+      
+      // Higher weight for title matches (most relevant)
+      if (title.includes(kwLower)) {
+        matched.push(kw)
+        score += 20
+      }
+      // Medium weight for description matches
+      else if (description.includes(kwLower)) {
+        matched.push(kw)
+        score += 12
+      }
+      // Lower weight for category/agency matches
+      else if (category.includes(kwLower) || agency.includes(kwLower)) {
+        matched.push(kw)
+        score += 8
+      }
+    }
+    
+    // Bonus for multiple keyword matches (compound relevance)
+    if (matched.length >= 3) score += 15
+    if (matched.length >= 5) score += 10
+    
+    // Check for ARQUIMEA-specific terms that indicate high relevance
+    const arquimeaBoostTerms = [
+      "defense", "defence", "military", "satellite", "space", "UAV", "drone", 
+      "autonomous", "robotics", "AI", "biosensor", "therapeutics", "propulsion",
+      "navigation", "quantum", "cryptography", "photonics", "neuromorphic"
+    ]
+    
+    for (const term of arquimeaBoostTerms) {
+      if (fullText.includes(term.toLowerCase()) && !matched.includes(term)) {
+        score += 5
+      }
+    }
+    
+    // Cap score at 99
+    score = Math.min(99, score)
+    
+    // Only return score if we have at least one keyword match
+    if (matched.length === 0) {
+      score = 0
+    }
+    
     return { score, matched }
   }
 
@@ -550,11 +618,16 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
 
-    // Score grants against program keywords
+    // Score grants against program keywords - STRICT filtering for ARQUIMEA relevance
     const programResults: SyncResult[] = []
+    const MIN_SCORE_THRESHOLD = 25  // Minimum score to be considered relevant
+    const MIN_KEYWORDS_MATCH = 1    // Must match at least 1 keyword
+    
     for (const grant of allRawGrants) {
       const { score, matched } = scoreRelevance(grant, program.keywords)
-      if (matched.length > 0 || score >= 50) {
+      
+      // Only include if score meets threshold AND has keyword matches
+      if (score >= MIN_SCORE_THRESHOLD && matched.length >= MIN_KEYWORDS_MATCH) {
         const srcLabel = grant._sourceLabel
         programResults.push({
           id: grant.id,
@@ -565,7 +638,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
               ? (grant.agency || grant.portal || "Spain Portal")
               : "EU Portal",
           relevanceScore: score,
-          matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
+          matchedKeywords: matched.slice(0, 5),
           url: grant.url || "#",
           deadline: grant.closeDate || "See portal",
           status: "new",
@@ -574,30 +647,39 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
 
-    // Sort by relevance
+    // Sort by relevance and mark high-relevance items
     programResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
-    programResults.forEach((r, i) => {
-      if (r.relevanceScore >= 60 || i < 5) {
+    
+    // Only keep top results to avoid noise
+    const maxResults = 20
+    const filteredResults = programResults.slice(0, maxResults)
+    
+    filteredResults.forEach((r) => {
+      // Mark as confirmed only if score is high enough
+      if (r.relevanceScore >= 50) {
         r.status = "confirmed"
       }
     })
 
-    // Update results
+    // Update results with filtered set
     setSyncResults((prev) => {
       const filtered = prev.filter((r) => r.programId !== program.id)
-      return [...filtered, ...programResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
+      return [...filtered, ...filteredResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
     })
 
-    // Push to main feed
-    if (allRawGrants.length > 0 && onGrantsFound) {
-      const cleanGrants = allRawGrants.map(({ _sourceLabel, ...rest }) => rest)
-      onGrantsFound(cleanGrants)
+    // Push only relevant grants to main feed
+    if (filteredResults.length > 0 && onGrantsFound) {
+      const relevantGrantIds = new Set(filteredResults.map(r => r.id))
+      const relevantGrants = allRawGrants
+        .filter(g => relevantGrantIds.has(g.id))
+        .map(({ _sourceLabel, ...rest }) => rest)
+      onGrantsFound(relevantGrants)
     }
 
     addLog(
       `${program.name}`,
-      programResults.length > 0 ? "success" : "warning",
-      `Found ${programResults.length} relevant opportunities (${programResults.filter((r) => r.relevanceScore >= 60).length} high-relevance)`,
+      filteredResults.length > 0 ? "success" : "warning",
+      `Found ${filteredResults.length} relevant opportunities (${filteredResults.filter((r) => r.relevanceScore >= 50).length} high-relevance)`,
       program.id
     )
 
@@ -607,7 +689,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
         ...prev[program.id],
         isRunning: false,
         lastSync: new Date(),
-        resultsCount: programResults.length,
+        resultsCount: filteredResults.length,
       },
     }))
     setActiveProgramId(null)
@@ -769,11 +851,16 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
 
-    // Score grants
+    // Score grants - STRICT filtering
     const customResults: SyncResult[] = []
+    const MIN_SCORE = 25
+    const MIN_MATCHES = 1
+    
     for (const grant of allRawGrants) {
       const { score, matched } = scoreRelevance(grant, search.keywords)
-      if (matched.length > 0 || score >= 50) {
+      
+      // Only include if meets thresholds
+      if (score >= MIN_SCORE && matched.length >= MIN_MATCHES) {
         const srcLabel = grant._sourceLabel
         customResults.push({
           id: grant.id,
@@ -784,7 +871,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
               ? (grant.agency || grant.portal || "Spain Portal")
               : "EU Portal",
           relevanceScore: score,
-          matchedKeywords: matched.length > 0 ? matched.slice(0, 5) : ["general"],
+          matchedKeywords: matched.slice(0, 5),
           url: grant.url || "#",
           deadline: grant.closeDate || "See portal",
           status: "new",
@@ -793,9 +880,12 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
 
+    // Sort and limit results
     customResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
-    customResults.forEach((r, i) => {
-      if (r.relevanceScore >= 60 || i < 5) {
+    const filteredCustomResults = customResults.slice(0, 20)
+    
+    filteredCustomResults.forEach((r) => {
+      if (r.relevanceScore >= 50) {
         r.status = "confirmed"
       }
     })
@@ -803,26 +893,29 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     // Update results
     setSyncResults((prev) => {
       const filtered = prev.filter((r) => r.programId !== search.id)
-      return [...filtered, ...customResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
+      return [...filtered, ...filteredCustomResults].sort((a, b) => b.relevanceScore - a.relevanceScore)
     })
 
     // Update custom search stats
     setCustomSearches((prev) =>
       prev.map((cs) =>
-        cs.id === search.id ? { ...cs, lastRun: new Date(), resultsCount: customResults.length } : cs
+        cs.id === search.id ? { ...cs, lastRun: new Date(), resultsCount: filteredCustomResults.length } : cs
       )
     )
 
-    // Push to main feed
-    if (allRawGrants.length > 0 && onGrantsFound) {
-      const cleanGrants = allRawGrants.map(({ _sourceLabel, ...rest }) => rest)
-      onGrantsFound(cleanGrants)
+    // Push to main feed - only relevant grants
+    if (filteredCustomResults.length > 0 && onGrantsFound) {
+      const relevantGrantIds = new Set(filteredCustomResults.map(r => r.id))
+      const relevantGrants = allRawGrants
+        .filter(g => relevantGrantIds.has(g.id))
+        .map(({ _sourceLabel, ...rest }) => rest)
+      onGrantsFound(relevantGrants)
     }
 
     addLog(
       `Custom: ${search.name}`,
-      customResults.length > 0 ? "success" : "warning",
-      `Found ${customResults.length} relevant opportunities (${customResults.filter((r) => r.relevanceScore >= 60).length} high-relevance)`,
+      filteredCustomResults.length > 0 ? "success" : "warning",
+      `Found ${filteredCustomResults.length} relevant opportunities (${filteredCustomResults.filter((r) => r.relevanceScore >= 50).length} high-relevance)`,
       search.id
     )
 
@@ -853,6 +946,35 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       return next
     })
   }
+  
+  // Filter results based on source and status filters
+  const filterResults = (results: SyncResult[]) => {
+    return results.filter((result) => {
+      // Source filter
+      let sourceMatch = sourceFilter.all
+      if (!sourceFilter.all) {
+        const sourceLower = result.source.toLowerCase()
+        if (sourceFilter.usa && (sourceLower.includes("grants.gov") || sourceLower.includes("sam.gov") || sourceLower.includes("usa"))) {
+          sourceMatch = true
+        }
+        if (sourceFilter.eu && (sourceLower.includes("eu") || sourceLower.includes("horizon") || sourceLower.includes("europe"))) {
+          sourceMatch = true
+        }
+        if (sourceFilter.spain && (sourceLower.includes("spain") || sourceLower.includes("españa") || sourceLower.includes("cdti"))) {
+          sourceMatch = true
+        }
+      }
+      
+      // Status filter
+      let statusMatch = statusFilter.all
+      if (!statusFilter.all) {
+        if (statusFilter.new && result.status === "new") statusMatch = true
+        if (statusFilter.confirmed && result.status === "confirmed") statusMatch = true
+      }
+      
+      return sourceMatch && statusMatch
+    })
+  }
 
   const getRelevanceColor = (score: number) => {
     if (score >= 90) return "bg-emerald-100 text-emerald-800 border-emerald-200"
@@ -877,7 +999,101 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   const enabledCount = ARQUIMEA_PROGRAMS.filter((p) => programStates[p.id]?.enabled).length
 
   return (
-    <div className="space-y-6">
+    <div className="flex gap-6">
+      {/* Sidebar Filters */}
+      <div className="w-64 flex-shrink-0">
+        <Card className="sticky top-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Filter Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-6">
+            {/* Source Filter */}
+            <div>
+              <h3 className="font-medium text-sm mb-2 text-gray-700">Source</h3>
+              <div className="space-y-2">
+                {[
+                  { key: "all", label: "All Sources", icon: Globe },
+                  { key: "usa", label: "USA (Grants.gov / SAM.gov)", icon: Flag },
+                  { key: "eu", label: "EU (Horizon / Tenders)", icon: Globe },
+                  { key: "spain", label: "Spain (CDTI / Portals)", icon: Flag },
+                ].map(({ key, label, icon: Icon }) => (
+                  <div key={key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`gpt-source-${key}`}
+                      checked={sourceFilter[key as keyof typeof sourceFilter]}
+                      onCheckedChange={(checked) => {
+                        if (key === "all") {
+                          setSourceFilter({ all: true, usa: false, eu: false, spain: false })
+                        } else {
+                          setSourceFilter((prev) => ({
+                            all: false,
+                            usa: key === "usa" ? !!checked : prev.usa,
+                            eu: key === "eu" ? !!checked : prev.eu,
+                            spain: key === "spain" ? !!checked : prev.spain,
+                          }))
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`gpt-source-${key}`} className="text-sm flex items-center gap-1 cursor-pointer">
+                      <Icon className="h-3 w-3" />
+                      {label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div>
+              <h3 className="font-medium text-sm mb-2 text-gray-700">Status</h3>
+              <div className="space-y-2">
+                {[
+                  { key: "all", label: "All Status" },
+                  { key: "new", label: "New" },
+                  { key: "confirmed", label: "Confirmed (High Relevance)" },
+                ].map(({ key, label }) => (
+                  <div key={key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`gpt-status-${key}`}
+                      checked={statusFilter[key as keyof typeof statusFilter]}
+                      onCheckedChange={(checked) => {
+                        if (key === "all") {
+                          setStatusFilter({ all: true, new: false, confirmed: false })
+                        } else {
+                          setStatusFilter((prev) => ({
+                            all: false,
+                            new: key === "new" ? !!checked : prev.new,
+                            confirmed: key === "confirmed" ? !!checked : prev.confirmed,
+                          }))
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`gpt-status-${key}`} className="text-sm cursor-pointer">
+                      {label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Results Summary */}
+            <div className="pt-4 border-t">
+              <h3 className="font-medium text-sm mb-2 text-gray-700">Results Summary</h3>
+              <div className="space-y-1 text-xs text-gray-600">
+                <p>Total: <span className="font-semibold">{syncResults.length}</span> opportunities</p>
+                <p>Filtered: <span className="font-semibold">{filterResults(syncResults).length}</span> showing</p>
+                <p>High Relevance: <span className="font-semibold text-emerald-600">{syncResults.filter(r => r.status === "confirmed").length}</span></p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 space-y-6">
       {/* Header Card */}
       <Card className="border-[#1e3a5f]/20">
         <CardHeader className="pb-3">
@@ -1093,7 +1309,8 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {customSearches.map((search) => {
                 const syncState = customSyncStates[search.id]
-                const searchResults = syncResults.filter((r) => r.programId === search.id)
+                const allSearchResults = syncResults.filter((r) => r.programId === search.id)
+                const searchResults = filterResults(allSearchResults)
                 const isExpanded = expandedCustomSearches.has(search.id)
 
                 return (
@@ -1204,30 +1421,46 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
                       )}
                     </div>
 
-                    {/* Expanded Results */}
+                    {/* Expanded Results - Show ALL */}
                     {isExpanded && searchResults.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 max-h-48 overflow-y-auto space-y-2">
-                        {searchResults.slice(0, 5).map((result) => (
-                          <div key={result.id} className="text-xs">
-                            <a
-                              href={result.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-emerald-700 hover:underline font-medium line-clamp-1"
-                            >
-                              {result.title}
-                            </a>
-                            <div className="flex items-center gap-2 text-gray-400 mt-0.5">
-                              <span>{result.source}</span>
-                              <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
-                                {result.relevanceScore}%
-                              </Badge>
+                      <div className="mt-3 pt-3 border-t border-gray-100 max-h-[400px] overflow-y-auto space-y-2">
+                        {searchResults.map((result, idx) => (
+                          <div key={result.id} className="text-xs border-b border-gray-50 pb-2 last:border-0">
+                            <div className="flex items-start gap-2">
+                              <span className="text-gray-400 font-mono text-[10px] w-4">{idx + 1}</span>
+                              <div className="flex-1">
+                                <a
+                                  href={result.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-emerald-700 hover:underline font-medium block"
+                                >
+                                  {result.title}
+                                </a>
+                                <div className="flex items-center gap-2 text-gray-400 mt-1">
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                                    {result.source}
+                                  </Badge>
+                                  <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
+                                    {result.relevanceScore}%
+                                  </Badge>
+                                  {result.deadline && result.deadline !== "See portal" && (
+                                    <span className="text-[10px]">Deadline: {result.deadline}</span>
+                                  )}
+                                </div>
+                                {result.matchedKeywords.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {result.matchedKeywords.map((kw) => (
+                                      <span key={kw} className="text-[9px] text-emerald-600 bg-emerald-50 px-1 rounded">
+                                        {kw}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
-                        {searchResults.length > 5 && (
-                          <p className="text-[10px] text-gray-400 text-center">+{searchResults.length - 5} more</p>
-                        )}
                       </div>
                     )}
                   </div>
@@ -1250,7 +1483,8 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {ARQUIMEA_PROGRAMS.map((program) => {
           const state = programStates[program.id]
-          const programResults = syncResults.filter((r) => r.programId === program.id)
+          const allProgramResults = syncResults.filter((r) => r.programId === program.id)
+          const programResults = filterResults(allProgramResults)
           const isExpanded = expandedPrograms.has(program.id)
           const Icon = program.icon
 
@@ -1345,32 +1579,46 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
                   )}
                 </div>
 
-                {/* Expanded Results */}
+                {/* Expanded Results - Show ALL */}
                 {isExpanded && programResults.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 max-h-48 overflow-y-auto space-y-2">
-                    {programResults.slice(0, 5).map((result) => (
-                      <div key={result.id} className="text-xs">
-                        <a
-                          href={result.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#1e3a5f] hover:underline font-medium line-clamp-1"
-                        >
-                          {result.title}
-                        </a>
-                        <div className="flex items-center gap-2 text-gray-400 mt-0.5">
-                          <span>{result.source}</span>
-                          <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
-                            {result.relevanceScore}%
-                          </Badge>
+                  <div className="mt-3 pt-3 border-t border-gray-100 max-h-[400px] overflow-y-auto space-y-2">
+                    {programResults.map((result, idx) => (
+                      <div key={result.id} className="text-xs border-b border-gray-50 pb-2 last:border-0">
+                        <div className="flex items-start gap-2">
+                          <span className="text-gray-400 font-mono text-[10px] w-4">{idx + 1}</span>
+                          <div className="flex-1">
+                            <a
+                              href={result.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#1e3a5f] hover:underline font-medium block"
+                            >
+                              {result.title}
+                            </a>
+                            <div className="flex items-center gap-2 text-gray-400 mt-1">
+                              <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                                {result.source}
+                              </Badge>
+                              <Badge className={`text-[9px] px-1 py-0 ${getRelevanceColor(result.relevanceScore)}`}>
+                                {result.relevanceScore}%
+                              </Badge>
+                              {result.deadline && result.deadline !== "See portal" && (
+                                <span className="text-[10px]">Deadline: {result.deadline}</span>
+                              )}
+                            </div>
+                            {result.matchedKeywords.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {result.matchedKeywords.map((kw) => (
+                                  <span key={kw} className="text-[9px] text-emerald-600 bg-emerald-50 px-1 rounded">
+                                    {kw}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
-                    {programResults.length > 5 && (
-                      <p className="text-[10px] text-gray-400 text-center">
-                        +{programResults.length - 5} more results
-                      </p>
-                    )}
                   </div>
                 )}
               </CardContent>
@@ -1416,24 +1664,24 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
             <h4 className="text-sm font-semibold text-[#1e3a5f] mb-3">Overall Sync Summary</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div className="bg-white rounded p-3 text-center">
-                <div className="font-bold text-[#1e3a5f] text-xl">{syncResults.length}</div>
-                <div className="text-gray-500">Total Opportunities</div>
+                <div className="font-bold text-[#1e3a5f] text-xl">{filterResults(syncResults).length}</div>
+                <div className="text-gray-500">Showing</div>
               </div>
               <div className="bg-white rounded p-3 text-center">
                 <div className="font-bold text-emerald-600 text-xl">
-                  {syncResults.filter((r) => r.relevanceScore >= 60).length}
+                  {filterResults(syncResults).filter((r) => r.relevanceScore >= 50).length}
                 </div>
                 <div className="text-gray-500">High Relevance</div>
               </div>
               <div className="bg-white rounded p-3 text-center">
                 <div className="font-bold text-[#1e3a5f] text-xl">
-                  {new Set(syncResults.map((r) => r.programId)).size}
+                  {new Set(filterResults(syncResults).map((r) => r.programId)).size}
                 </div>
                 <div className="text-gray-500">Programs Matched</div>
               </div>
               <div className="bg-white rounded p-3 text-center">
                 <div className="font-bold text-[#1e3a5f] text-xl">
-                  {new Set(syncResults.map((r) => r.source)).size}
+                  {new Set(filterResults(syncResults).map((r) => r.source)).size}
                 </div>
                 <div className="text-gray-500">Sources</div>
               </div>
@@ -1441,6 +1689,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   )
 }

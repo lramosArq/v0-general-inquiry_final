@@ -13,6 +13,7 @@ export interface UserAlert {
   frequency: "immediate" | "daily" | "weekly"
   createdAt: string
   lastTriggered?: string
+  customEmail?: string
 }
 
 export interface User {
@@ -120,6 +121,16 @@ const PREDEFINED_USERS: User[] = [
     role: "",
     alerts: [],
     createdAt: "2026-03-05T00:00:00.000Z",
+  },
+  {
+    id: "user-lramos-009",
+    email: "lramos@arquimea.com",
+    password: "Lramos123!",
+    name: "L. Ramos",
+    businessUnit: "Connect",
+    role: "Testing",
+    alerts: [],
+    createdAt: "2026-04-23T00:00:00.000Z",
   },
 ]
 

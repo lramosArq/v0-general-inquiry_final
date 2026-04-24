@@ -1,13 +1,23 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 
+// Validate email format: must be "email@example.com" or "Name <email@example.com>"
+function isValidEmailFormat(email: string): boolean {
+  const simpleEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const namedEmailRegex = /^.+\s*<[^\s@]+@[^\s@]+\.[^\s@]+>$/
+  return simpleEmailRegex.test(email) || namedEmailRegex.test(email)
+}
+
 // Get the FROM email address - use custom domain if configured, otherwise use Resend's default
 function getFromEmail(): string {
   // Check for custom domain configured via environment variable
   const customDomain = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM
-  if (customDomain) {
+  
+  // Validate that it's actually an email format, not an API key
+  if (customDomain && isValidEmailFormat(customDomain)) {
     return customDomain
   }
+  
   // Default to Resend's onboarding domain (works for verified emails only)
   return "ArquiAlert <onboarding@resend.dev>"
 }

@@ -3,12 +3,22 @@ import { NextResponse } from "next/server"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+// Validate email format: must be "email@example.com" or "Name <email@example.com>"
+function isValidEmailFormat(email: string): boolean {
+  const simpleEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const namedEmailRegex = /^.+\s*<[^\s@]+@[^\s@]+\.[^\s@]+>$/
+  return simpleEmailRegex.test(email) || namedEmailRegex.test(email)
+}
+
 // Get the FROM email address - use custom domain if configured
 function getFromEmail(): string {
   const customDomain = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM
-  if (customDomain) {
+  
+  // Validate that it's actually an email format, not an API key
+  if (customDomain && isValidEmailFormat(customDomain)) {
     return customDomain
   }
+  
   return "Arquimea Grants <onboarding@resend.dev>"
 }
 

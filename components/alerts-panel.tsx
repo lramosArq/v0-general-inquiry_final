@@ -99,7 +99,7 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
     }
   }
 
-  // Send test email function - works without Resend domain verification
+  // Send test email function - uses same endpoint as alerts for consistent formatting
   const handleSendTestEmail = async () => {
     const targetEmail = testEmail || user.email
     if (!targetEmail) {
@@ -111,39 +111,50 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
     setMessage({ type: "", text: "" })
 
     try {
-      // Get sample grants for test
-      const sampleGrants = grants.slice(0, 3).map(g => ({
+      // Get sample grants for test - use real grants data with all fields
+      const sampleGrants = grants.slice(0, 5).map(g => ({
+        id: g.id,
         title: g.title || "Sample Grant",
         agency: g.agency || "Sample Agency", 
-        deadline: g.closeDate || "2026-12-31",
-        amount: g.awardCeiling || "$100,000",
+        opportunityNumber: g.opportunityNumber || g.id,
+        status: g.status || "Open",
+        closeDate: g.closeDate || "2026-12-31",
+        postedDate: g.postedDate,
+        awardCeiling: g.awardCeiling,
+        fundingInstrument: g.fundingInstrument,
+        category: g.category,
+        description: g.description,
+        source: g.source || "usa",
         url: g.url || "#"
       }))
 
       if (sampleGrants.length === 0) {
         sampleGrants.push({
-          title: "Test Grant Opportunity",
-          agency: "Test Agency",
-          deadline: "2026-12-31",
-          amount: "$50,000",
-          url: "#"
+          id: "test-001",
+          title: "Test Grant Opportunity - Horizon Europe Research",
+          agency: "European Commission",
+          opportunityNumber: "HORIZON-TEST-2026",
+          status: "Open",
+          closeDate: "2026-12-31",
+          postedDate: "2026-01-15",
+          awardCeiling: 500000,
+          fundingInstrument: "Grant",
+          category: "Research & Innovation",
+          description: "This is a test grant to verify your email alert system is working correctly. Real alerts will contain actual grant opportunities matching your filters.",
+          source: "eu",
+          url: "https://ec.europa.eu/info/funding-tenders"
         })
       }
 
-      // Use EmailJS endpoint for test (no domain restrictions)
-      const response = await fetch("/api/send-emailjs", {
+      // Use the same send-alert endpoint for consistent email formatting
+      const response = await fetch("/api/send-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: targetEmail,
-          subject: "Test Alert - ArquiAlert Grant Notifications",
-          content: `This is a test email from ArquiAlert.\n\nYou have ${sampleGrants.length} matching grant opportunities:\n\n${sampleGrants.map((g, i) => `${i + 1}. ${g.title}\n   Agency: ${g.agency}\n   Deadline: ${g.deadline}\n   Amount: ${g.amount}`).join("\n\n")}\n\nThis confirms your email alerts are working correctly.`,
-          tenderData: {
-            titulo: sampleGrants[0]?.title,
-            organismo: sampleGrants[0]?.agency,
-            fechaLimite: sampleGrants[0]?.deadline,
-            presupuesto: sampleGrants[0]?.amount,
-          }
+          alertName: "Test Alert",
+          grants: sampleGrants,
+          frequency: "immediate"
         }),
       })
 
@@ -152,10 +163,10 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       if (result.success) {
         setMessage({ 
           type: "success", 
-          text: `Test email sent to ${targetEmail}! (Method: ${result.method})` 
+          text: `Test email sent to ${targetEmail}!` 
         })
       } else {
-        setMessage({ type: "error", text: result.message || "Failed to send test email" })
+        setMessage({ type: "error", text: result.error || result.message || "Failed to send test email" })
       }
     } catch (error) {
       console.error("[v0] Test email error:", error)

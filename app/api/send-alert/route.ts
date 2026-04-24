@@ -49,25 +49,100 @@ export async function POST(request: Request) {
 
     const grantsHTML = grants
       .map(
-        (grant: any) => `
-      <tr style="border-bottom: 1px solid #e5e7eb;">
-        <td style="padding: 12px; vertical-align: top;">
-          <strong style="color: #1e3a5f;">${grant.title}</strong>
-          <br/>
-          <span style="font-size: 12px; color: #666;">${grant.opportunityNumber}</span>
-        </td>
-        <td style="padding: 12px; vertical-align: top;">${grant.agency}</td>
-        <td style="padding: 12px; vertical-align: top;">
-          <span style="background: #22c55e; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
-            ${grant.status}
+        (grant: any, index: number) => {
+          // Determine the grant URL - prioritize direct URL, then build from source
+          let grantUrl = grant.url || "#"
+          if (grantUrl === "#" || !grantUrl) {
+            // Build URL based on source
+            if (grant.source === "grants.gov" || grant.source === "usa") {
+              grantUrl = `https://www.grants.gov/search-results-detail/${grant.opportunityNumber || grant.id}`
+            } else if (grant.source === "sam.gov") {
+              grantUrl = `https://sam.gov/opp/${grant.id}/view`
+            } else if (grant.source === "eu" || grant.source?.includes("EU")) {
+              grantUrl = `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${grant.id}`
+            }
+          }
+          
+          // Format budget/funding amount
+          const budget = grant.awardCeiling || grant.fundingInstrument || grant.budget || grant.amount || "Not specified"
+          const formattedBudget = typeof budget === "number" 
+            ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(budget)
+            : budget
+          
+          // Status color
+          const statusColor = grant.status?.toLowerCase() === "open" ? "#22c55e" 
+            : grant.status?.toLowerCase() === "closed" ? "#ef4444" 
+            : "#f59e0b"
+          
+          // Category/Type
+          const category = grant.category || grant.fundingType || grant.type || "General"
+          
+          // Source badge
+          const sourceBadge = grant.source === "usa" || grant.source === "grants.gov" ? "USA" 
+            : grant.source === "sam.gov" ? "SAM.gov"
+            : grant.source === "eu" ? "EU" 
+            : grant.source === "spain" ? "Spain"
+            : grant.source || "Other"
+            
+          return `
+      <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+          <span style="background: #1e3a5f; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">
+            ${sourceBadge}
           </span>
-        </td>
-        <td style="padding: 12px; vertical-align: top;">${grant.closeDate || "N/A"}</td>
-        <td style="padding: 12px; vertical-align: top;">
-          <a href="${grant.url}" style="color: #2563eb; text-decoration: none;">View</a>
-        </td>
-      </tr>
-    `,
+          <span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+            ${grant.status || "Open"}
+          </span>
+        </div>
+        
+        <h3 style="margin: 0 0 8px 0; color: #1e3a5f; font-size: 16px;">
+          <a href="${grantUrl}" style="color: #1e3a5f; text-decoration: none;" target="_blank">
+            ${grant.title}
+          </a>
+        </h3>
+        
+        <table style="width: 100%; font-size: 13px; color: #666;">
+          <tr>
+            <td style="padding: 4px 0; width: 120px;"><strong>Agency:</strong></td>
+            <td style="padding: 4px 0;">${grant.agency || "Not specified"}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0;"><strong>ID:</strong></td>
+            <td style="padding: 4px 0;">${grant.opportunityNumber || grant.id || "N/A"}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0;"><strong>Category:</strong></td>
+            <td style="padding: 4px 0;">${category}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0;"><strong>Budget:</strong></td>
+            <td style="padding: 4px 0; color: #059669; font-weight: bold;">${formattedBudget}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0;"><strong>Deadline:</strong></td>
+            <td style="padding: 4px 0; color: #dc2626; font-weight: bold;">${grant.closeDate || "See portal"}</td>
+          </tr>
+          ${grant.description ? `
+          <tr>
+            <td colspan="2" style="padding: 8px 0 4px 0;">
+              <div style="background: #f8fafc; padding: 8px; border-radius: 4px; font-size: 12px; color: #555;">
+                ${grant.description.substring(0, 200)}${grant.description.length > 200 ? "..." : ""}
+              </div>
+            </td>
+          </tr>
+          ` : ""}
+        </table>
+        
+        <div style="margin-top: 12px; text-align: right;">
+          <a href="${grantUrl}" 
+             style="background: #2563eb; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-size: 13px; display: inline-block;"
+             target="_blank">
+            View Full Details
+          </a>
+        </div>
+      </div>
+    `
+        }
       )
       .join("")
 
@@ -102,20 +177,9 @@ export async function POST(request: Request) {
             </p>
           </div>
 
-          <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border: 1px solid #e5e7eb;">
-            <thead>
-              <tr style="background: #1e3a5f; color: white;">
-                <th style="padding: 12px; text-align: left;">Title</th>
-                <th style="padding: 12px; text-align: left;">Agency</th>
-                <th style="padding: 12px; text-align: left;">Status</th>
-                <th style="padding: 12px; text-align: left;">Deadline</th>
-                <th style="padding: 12px; text-align: left;">Link</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${grantsHTML}
-            </tbody>
-          </table>
+          <div style="margin-top: 20px;">
+            ${grantsHTML}
+          </div>
 
           <div style="margin-top: 30px; padding: 20px; background: #f0f9ff; border-radius: 8px; text-align: center;">
             <a href="${process.env.NEXT_PUBLIC_BASE_URL || "https://arquimea-grants.vercel.app"}" 

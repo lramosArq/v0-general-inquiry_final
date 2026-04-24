@@ -3,12 +3,23 @@ import { NextResponse } from "next/server"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+// Get the FROM email address - use custom domain if configured
+function getFromEmail(): string {
+  const customDomain = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM
+  if (customDomain) {
+    return customDomain
+  }
+  return "Arquimea Grants <onboarding@resend.dev>"
+}
+
 export async function POST(request: Request) {
   try {
     const { to, alertName, grants, frequency } = await request.json()
 
+    const fromEmail = getFromEmail()
     console.log("[v0] Send Alert API called")
     console.log("[v0] Recipient:", to)
+    console.log("[v0] FROM email:", fromEmail)
     console.log("[v0] Alert name:", alertName)
     console.log("[v0] Grants count:", grants?.length)
     console.log("[v0] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY)
@@ -112,7 +123,7 @@ export async function POST(request: Request) {
     `
 
     const { data, error } = await resend.emails.send({
-      from: "Arquimea Grants <onboarding@resend.dev>",
+      from: fromEmail,
       to: [to],
       subject: `[Arquimea Alert] ${alertName} - ${grants.length} grant${grants.length !== 1 ? "s" : ""} found`,
       html,

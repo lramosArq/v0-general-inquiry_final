@@ -1,13 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 
+// Get the FROM email address - use custom domain if configured, otherwise use Resend's default
+function getFromEmail(): string {
+  // Check for custom domain configured via environment variable
+  const customDomain = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM
+  if (customDomain) {
+    return customDomain
+  }
+  // Default to Resend's onboarding domain (works for verified emails only)
+  return "ArquiAlert <onboarding@resend.dev>"
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { to, subject, content, tenderData } = await request.json()
 
-    console.log("[v0] 📧 API: Enviando email a:", to)
+    const fromEmail = getFromEmail()
+    console.log("[v0] API: Enviando email a:", to)
+    console.log("[v0] FROM email:", fromEmail)
     console.log("[v0] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY)
-    console.log("[v0] EMAILJS keys present:", !!process.env.EMAILJS_SERVICE_ID, !!process.env.EMAILJS_PUBLIC_KEY)
 
     // Try Resend first (most reliable)
     if (process.env.RESEND_API_KEY) {
@@ -36,7 +48,7 @@ export async function POST(request: NextRequest) {
         `
 
         const { data, error } = await resend.emails.send({
-          from: "ArquiAlert <onboarding@resend.dev>",
+          from: fromEmail,
           to: [to],
           subject: subject || "ArquiAlert - Test Notification",
           html: htmlContent,

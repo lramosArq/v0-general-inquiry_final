@@ -60,7 +60,7 @@ interface CustomSearch {
 }
 
 // ARQUIMEA Programs with their specialized prompts
-const ARQUIMEA_PROGRAMS = [
+export const ARQUIMEA_PROGRAMS = [
   {
     id: "arqeos-missiles",
     name: "ARQEOS Missiles",

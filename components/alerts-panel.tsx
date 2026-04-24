@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UserService, type User, type UserAlert } from "@/lib/user-service"
-import { Bell, Plus, Trash2, Mail, Loader2, Send } from "lucide-react"
+import { ARQUIMEA_PROGRAMS } from "@/components/gpt-sync-panel"
+import { Bell, Plus, Trash2, Mail, Loader2, Send, Bot } from "lucide-react"
 
 interface AlertsPanelProps {
   user: User
@@ -46,6 +47,8 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
   const [testMode, setTestMode] = useState(true) // Enable test mode by default
   const [testEmail, setTestEmail] = useState("")
   const [isSendingTest, setIsSendingTest] = useState(false)
+  const [selectedGptPrograms, setSelectedGptPrograms] = useState<string[]>([])
+  const [useGptSyncFilter, setUseGptSyncFilter] = useState(false)
 
   const userService = UserService.getInstance()
 
@@ -60,9 +63,13 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
 
     try {
       const targetEmail = useCustomEmail && customEmail ? customEmail : user.email
+      const filtersWithGpt = {
+        ...currentFilters,
+        gptSyncPrograms: useGptSyncFilter ? selectedGptPrograms : undefined,
+      }
       const result = await userService.addAlert(user.id, {
         name: alertName,
-        filters: currentFilters,
+        filters: filtersWithGpt,
         emailNotifications,
         frequency,
         customEmail: useCustomEmail ? customEmail : undefined,
@@ -77,6 +84,8 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
         setTimeout(() => {
           setIsCreateModalOpen(false)
           setAlertName("")
+          setSelectedGptPrograms([])
+          setUseGptSyncFilter(false)
           setMessage({ type: "", text: "" })
         }, 1000)
       } else {
@@ -239,6 +248,22 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
           if (!matchesCategory) return false
         }
 
+        // GPT Sync Programs filter - filter by program keywords
+        if (alert.filters.gptSyncPrograms && alert.filters.gptSyncPrograms.length > 0) {
+          const selectedPrograms = alert.filters.gptSyncPrograms
+            .map(id => ARQUIMEA_PROGRAMS.find(p => p.id === id))
+            .filter(Boolean)
+          
+          // Get all keywords from selected programs
+          const allKeywords = selectedPrograms.flatMap(p => p!.keywords)
+          
+          // Check if grant matches any keyword
+          const grantText = `${grant.title} ${grant.description || ""} ${grant.category || ""} ${grant.agency || ""}`.toLowerCase()
+          const matchesGptKeyword = allKeywords.some(kw => grantText.includes(kw.toLowerCase()))
+          
+          if (!matchesGptKeyword) return false
+        }
+
         return true
       })
 
@@ -303,6 +328,13 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
     }
     if (filters.categories.length > 0 && !filters.categories.includes("all")) {
       parts.push(filters.categories.join(", "))
+    }
+    if (filters.gptSyncPrograms && filters.gptSyncPrograms.length > 0) {
+      const programNames = filters.gptSyncPrograms
+        .map(id => ARQUIMEA_PROGRAMS.find(p => p.id === id)?.name || id)
+        .slice(0, 3)
+      const suffix = filters.gptSyncPrograms.length > 3 ? ` +${filters.gptSyncPrograms.length - 3}` : ""
+      parts.push(`GPT: ${programNames.join(", ")}${suffix}`)
     }
     return parts.length > 0 ? parts.join(" | ") : "All grants"
   }
@@ -399,6 +431,12 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
                       <Badge variant="outline" className="text-xs">
                         {alert.frequency}
                       </Badge>
+                      {alert.filters.gptSyncPrograms && alert.filters.gptSyncPrograms.length > 0 && (
+                        <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                          <Bot className="h-3 w-3 mr-1" />
+                          {alert.filters.gptSyncPrograms.length} GPT
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-sm text-gray-500 mb-2">{getFilterSummary(alert.filters)}</p>
                     <div className="flex items-center gap-4 text-xs text-gray-400">
@@ -503,6 +541,66 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
                   <SelectItem value="weekly">Weekly summary</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* GPT Sync Programs Filter */}
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="use-gpt-sync-filter"
+                  checked={useGptSyncFilter}
+                  onCheckedChange={(checked) => {
+                    setUseGptSyncFilter(checked as boolean)
+                    if (!checked) setSelectedGptPrograms([])
+                  }}
+                />
+                <Label htmlFor="use-gpt-sync-filter" className="text-sm flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-purple-600" />
+                  Filter by GPT Sync Programs (ARQUIMEA)
+                </Label>
+              </div>
+
+              {useGptSyncFilter && (
+                <div className="ml-6 space-y-2">
+                  <p className="text-xs text-gray-500 mb-2">
+                    Select the programs to receive alerts only for opportunities matching those keywords:
+                  </p>
+                  <div className="max-h-48 overflow-y-auto border rounded-md p-2 space-y-1 bg-gray-50">
+                    {ARQUIMEA_PROGRAMS.map((program) => {
+                      const Icon = program.icon
+                      return (
+                        <div key={program.id} className="flex items-center space-x-2 py-1">
+                          <Checkbox
+                            id={`gpt-program-${program.id}`}
+                            checked={selectedGptPrograms.includes(program.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedGptPrograms((prev) => [...prev, program.id])
+                              } else {
+                                setSelectedGptPrograms((prev) => prev.filter((id) => id !== program.id))
+                              }
+                            }}
+                          />
+                          <Label
+                            htmlFor={`gpt-program-${program.id}`}
+                            className="text-xs flex items-center gap-2 cursor-pointer"
+                          >
+                            <span className={`${program.color} p-1 rounded text-white`}>
+                              <Icon className="h-3 w-3" />
+                            </span>
+                            {program.name}
+                          </Label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {selectedGptPrograms.length > 0 && (
+                    <p className="text-xs text-purple-600">
+                      {selectedGptPrograms.length} program(s) selected
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">

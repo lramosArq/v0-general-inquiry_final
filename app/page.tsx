@@ -292,27 +292,12 @@ export default function GrantsSearchPage() {
       await claimService.initialize()
       setOpportunityClaims(claimService.getAllClaims())
       
-      // Poll for updates every 3 seconds
+      // Poll for updates every 30 seconds (reduced frequency to avoid UI flicker)
       const pollInterval = setInterval(async () => {
         const freshClaims = await claimService.refreshClaims()
         setOpportunityClaims(freshClaims)
         
-        // Also refresh user alerts from server
-        const userService = UserService.getInstance()
-        const currentUserData = userService.getCurrentUser()
-        if (currentUserData) {
-          try {
-            const response = await fetch(`/api/shared-data?type=alerts&userId=${currentUserData.id}`)
-            const result = await response.json()
-            if (result.success && result.data) {
-              const updatedUser = { ...currentUserData, alerts: result.data }
-              localStorage.setItem("arquimea_current_user", JSON.stringify(updatedUser))
-              setCurrentUser(updatedUser)
-            }
-          } catch { /* ignore */ }
-        }
-        
-        // Refresh feedback from server
+        // Refresh feedback from server (but NOT user to avoid re-triggering fetchGrants)
         try {
           const feedbackResponse = await fetch("/api/shared-data?type=feedback")
           const feedbackResult = await feedbackResponse.json()
@@ -323,7 +308,7 @@ export default function GrantsSearchPage() {
             setFeedbackStats({ interested, notInterested })
           }
         } catch { /* ignore */ }
-      }, 5000)
+      }, 30000)
       
       return () => clearInterval(pollInterval)
     }
@@ -331,11 +316,20 @@ export default function GrantsSearchPage() {
     initializeClaims()
   }, [])
 
+  // Track if we've already fetched grants for the current session
+  const [hasFetchedGrants, setHasFetchedGrants] = useState(false)
+  
   useEffect(() => {
-    if (currentUser) {
+    // Only fetch grants once when user logs in, not on every user object update
+    if (currentUser && !hasFetchedGrants) {
       fetchGrants()
+      setHasFetchedGrants(true)
     }
-  }, [currentUser])
+    // Reset when user logs out
+    if (!currentUser) {
+      setHasFetchedGrants(false)
+    }
+  }, [currentUser, hasFetchedGrants])
 
   useEffect(() => {
     if (grants.length > 0) {

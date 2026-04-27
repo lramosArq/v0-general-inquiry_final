@@ -146,7 +146,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: allGrants,
+      grants: allGrants,
+      data: allGrants, // backward compatibility
       total: allGrants.length,
       sources: {
         usa: allGrants.filter((g) => g.source === "usa").length,
@@ -162,7 +163,8 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        data: [],
+        grants: [],
+        data: [], // backward compatibility
         total: 0,
       },
       { status: 500 },
@@ -232,7 +234,8 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      data: allGrants,
+      grants: allGrants,
+      data: allGrants, // backward compatibility
       total: allGrants.length,
       sources: {
         usa: allGrants.filter((g) => g.source === "usa").length,
@@ -248,7 +251,8 @@ export async function GET() {
       {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        data: [],
+        grants: [],
+        data: [], // backward compatibility
         total: 0,
       },
       { status: 500 },

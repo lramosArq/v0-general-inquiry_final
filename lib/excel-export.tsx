@@ -326,27 +326,69 @@ export function exportAlertsToExcel(alerts: Alert[], grants: Grant[], filename?:
 }
 
 export function exportAlertMatchesToExcel(alert: Alert, grants: Grant[], filename?: string): void {
+  console.log("[v0] exportAlertMatchesToExcel - Total grants received:", grants?.length || 0)
+  console.log("[v0] exportAlertMatchesToExcel - Alert filters:", alert?.filters)
+  
+  // If no grants, export empty file with message
+  if (!grants || grants.length === 0) {
+    console.log("[v0] exportAlertMatchesToExcel - No grants available to filter")
+    // Export an empty file with a message
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>No Grants Available</title></head>
+<body>
+<h2>No grants available</h2>
+<p>Please ensure grants have been loaded before exporting.</p>
+<p>Alert: ${alert?.name || "Unknown"}</p>
+</body>
+</html>`
+    const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" })
+    const blobUrl = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = blobUrl
+    link.download = `no_grants_${new Date().toISOString().split("T")[0]}.xls`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(blobUrl)
+    return
+  }
+
   // Filter grants that match the alert criteria
   const matchingGrants = grants.filter(grant => {
     // Basic keyword match
-    if (alert.filters.keyword) {
+    if (alert.filters.keyword && alert.filters.keyword.trim()) {
       const keyword = alert.filters.keyword.toLowerCase()
       const matchesKeyword = 
         grant.title?.toLowerCase().includes(keyword) ||
         grant.description?.toLowerCase().includes(keyword) ||
-        grant.agency?.toLowerCase().includes(keyword)
+        grant.agency?.toLowerCase().includes(keyword) ||
+        grant.category?.toLowerCase().includes(keyword)
       if (!matchesKeyword) return false
     }
     
-    // Source filter
+    // Source filter - check both array format and object format
     if (alert.filters.sources && alert.filters.sources.length > 0) {
-      if (!alert.filters.sources.includes(grant.source)) return false
+      const sourceMatches = alert.filters.sources.some(s => {
+        const sourceStr = s.toLowerCase()
+        const grantSource = grant.source?.toLowerCase() || ""
+        return grantSource === sourceStr || 
+               grantSource.includes(sourceStr) || 
+               sourceStr.includes(grantSource)
+      })
+      if (!sourceMatches) return false
     }
     
     return true
   })
 
+  console.log("[v0] exportAlertMatchesToExcel - Matching grants:", matchingGrants.length)
+
+  // If no matching grants, export all grants instead
+  const grantsToExport = matchingGrants.length > 0 ? matchingGrants : grants
+
   // Use the XLSX export function with clickable links
   const exportFilename = filename || `alert_${alert.name.replace(/[^a-zA-Z0-9]/g, "_")}_matches_${new Date().toISOString().split("T")[0]}.xls`
-  exportGrantsToExcelXLSX(matchingGrants, exportFilename)
+  exportGrantsToExcelXLSX(grantsToExport, exportFilename)
 }

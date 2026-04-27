@@ -926,12 +926,12 @@ export default function GrantsSearchPage() {
         {showAlertsPanel && (
           <Card className="mb-6 border-[#1e3a5f] border-2">
             <CardContent className="py-4">
-              <AlertsPanel
-                user={currentUser}
-                onUserUpdate={setCurrentUser}
-                currentFilters={getCurrentFilters()}
-                grants={filteredGrants}
-              />
+<AlertsPanel
+  user={currentUser}
+  onUserUpdate={setCurrentUser}
+  currentFilters={getCurrentFilters()}
+  grants={grants}
+  />
             </CardContent>
           </Card>
         )}

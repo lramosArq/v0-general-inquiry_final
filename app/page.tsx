@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X, Calendar, Bookmark, FolderOpen, Save, RotateCcw, Sparkles, Download } from "lucide-react"
-import { exportGrantsToExcel } from "@/lib/excel-export"
+import { exportGrantsToExcelXLSX } from "@/lib/excel-export"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
@@ -1479,7 +1479,7 @@ export default function GrantsSearchPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => exportGrantsToExcel(filteredGrants)}
+                          onClick={() => exportGrantsToExcelXLSX(filteredGrants)}
                           disabled={filteredGrants.length === 0 || isLoading}
                           className="flex items-center gap-1 text-xs h-8"
                         >

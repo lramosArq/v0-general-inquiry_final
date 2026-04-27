@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X, Calendar, Bookmark, FolderOpen, Save, RotateCcw, Sparkles, Download } from "lucide-react"
+import { exportGrantsToExcelXLSX } from "@/lib/excel-export"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
@@ -66,12 +67,96 @@ export default function GrantsSearchPage() {
   const [sortBy, setSortBy] = useState("posted-desc")
   const [dateRange, setDateRange] = useState("all")
 
+  // Prompt field for natural language search
+  const [promptSearch, setPromptSearch] = useState("")
+
+  // Date range filters (Release Date and Close Date separate)
+  const [releaseDateFilter, setReleaseDateFilter] = useState({
+    startDate: "",
+    endDate: "",
+  })
+  
+  const [closeDateFilter, setCloseDateFilter] = useState({
+    startDate: "",
+    endDate: "",
+  })
+
+  // Legacy date range filter (keeping for compatibility)
+  const [dateRangeFilter, setDateRangeFilter] = useState({
+    enabled: false,
+    startDate: "",
+    endDate: "",
+    dateType: "posted" as "posted" | "close",
+  })
+
+  // Region filter (multi-select)
   const [sourceFilter, setSourceFilter] = useState({
     all: true,
     usa: false,
     eu: false,
     spain: false,
+    other: false,
   })
+
+  // ORB/Vent filter (ARQUIMEA business units)
+  const [orbVentFilter, setOrbVentFilter] = useState({
+    all: true,
+    arcOthers: false,
+    bio: false,
+    connect: false,
+    defense: false,
+    molefy: false,
+    nd: false,
+    pulsar: false,
+    space: false,
+    volinga: false,
+    none: false,
+  })
+
+  // Program / TechMap filter
+  const [programFilter, setProgramFilter] = useState({
+    all: true,
+    program1: false,
+    program2: false,
+    program3: false,
+    others: false,
+    none: false,
+  })
+
+  // Type filter
+  const [typeFilter, setTypeFilter] = useState({
+    all: true,
+    grant: false,
+    contract: false,
+    cooperative: false,
+    other: false,
+  })
+
+  // NAICS filter
+  const [naicsFilter, setNaicsFilter] = useState("")
+
+  // Saved searches
+  const [savedSearches, setSavedSearches] = useState<Array<{
+    id: string
+    name: string
+    createdAt: string
+    filters: {
+      keyword: string
+      promptSearch: string
+      sourceFilter: typeof sourceFilter
+      statusFilters: typeof statusFilters
+      orbVentFilter: typeof orbVentFilter
+      programFilter: typeof programFilter
+      typeFilter: typeof typeFilter
+      naicsFilter: string
+      releaseDateFilter: typeof releaseDateFilter
+      closeDateFilter: typeof closeDateFilter
+      categoryFilters: typeof categoryFilters
+    }
+  }>>([])
+  const [showSavedSearches, setShowSavedSearches] = useState(false)
+  const [saveSearchName, setSaveSearchName] = useState("")
+  const [showSaveSearchModal, setShowSaveSearchModal] = useState(false)
 
   const [statusFilters, setStatusFilters] = useState({
     forecasted: true,
@@ -119,47 +204,27 @@ export default function GrantsSearchPage() {
       const userService = UserService.getInstance()
       const user = userService.getCurrentUser()
       if (user) {
-        console.log("[v0] Initializing user:", user.id, "with local alerts:", user.alerts?.length || 0)
+        // LOCAL ALERTS HAVE PRIORITY - they are the source of truth
+        const localAlerts = user.alerts || []
         
-        // Load alerts from server for this user
-        try {
-          const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
-          const result = await response.json()
-          console.log("[v0] Server alerts response:", result)
-          
-          if (result.success && result.data) {
-            // Merge server alerts with local alerts (server takes priority)
-            const serverAlerts = result.data || []
-            const localAlerts = user.alerts || []
-            
-            // Create a map of server alerts by ID
-            const alertsById = new Map()
-            serverAlerts.forEach((a: any) => alertsById.set(a.id, a))
-            
-            // Add local alerts that aren't on server yet
-            localAlerts.forEach((a: any) => {
-              if (!alertsById.has(a.id)) {
-                alertsById.set(a.id, a)
-                // Sync this local alert to server
-                fetch("/api/shared-data", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ type: "alerts", userId: user.id, action: "add", data: a }),
-                }).catch(() => {})
-              }
-            })
-            
-            const mergedAlerts = Array.from(alertsById.values())
-            user.alerts = mergedAlerts
-            console.log("[v0] Merged alerts count:", mergedAlerts.length)
-            
-            // Update localStorage with merged data
-            localStorage.setItem("arquimea_current_user", JSON.stringify(user))
+        // Try to sync local alerts to server (fire and forget)
+        if (localAlerts.length > 0) {
+          try {
+            // Sync all local alerts to server to ensure persistence across sessions
+            for (const alert of localAlerts) {
+              fetch("/api/shared-data", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: "alerts", userId: user.id, action: "add", data: alert }),
+              }).catch(() => {})
+            }
+          } catch {
+            // Ignore sync errors - local data is preserved
           }
-        } catch (e) {
-          console.log("[v0] Could not load alerts from server, using local data:", e)
         }
-        setCurrentUser({ ...user, alerts: user.alerts || [] })
+        
+        // Always use local alerts as the source of truth
+        setCurrentUser({ ...user, alerts: localAlerts })
       }
       setIsCheckingAuth(false)
     }
@@ -208,27 +273,12 @@ export default function GrantsSearchPage() {
       await claimService.initialize()
       setOpportunityClaims(claimService.getAllClaims())
       
-      // Poll for updates every 3 seconds
+      // Poll for updates every 30 seconds (reduced frequency to avoid UI flicker)
       const pollInterval = setInterval(async () => {
         const freshClaims = await claimService.refreshClaims()
         setOpportunityClaims(freshClaims)
         
-        // Also refresh user alerts from server
-        const userService = UserService.getInstance()
-        const currentUserData = userService.getCurrentUser()
-        if (currentUserData) {
-          try {
-            const response = await fetch(`/api/shared-data?type=alerts&userId=${currentUserData.id}`)
-            const result = await response.json()
-            if (result.success && result.data) {
-              const updatedUser = { ...currentUserData, alerts: result.data }
-              localStorage.setItem("arquimea_current_user", JSON.stringify(updatedUser))
-              setCurrentUser(updatedUser)
-            }
-          } catch { /* ignore */ }
-        }
-        
-        // Refresh feedback from server
+        // Refresh feedback from server (but NOT user to avoid re-triggering fetchGrants)
         try {
           const feedbackResponse = await fetch("/api/shared-data?type=feedback")
           const feedbackResult = await feedbackResponse.json()
@@ -239,7 +289,7 @@ export default function GrantsSearchPage() {
             setFeedbackStats({ interested, notInterested })
           }
         } catch { /* ignore */ }
-      }, 5000)
+      }, 30000)
       
       return () => clearInterval(pollInterval)
     }
@@ -247,22 +297,159 @@ export default function GrantsSearchPage() {
     initializeClaims()
   }, [])
 
+  // Track if we've already fetched grants for the current session
+  const [hasFetchedGrants, setHasFetchedGrants] = useState(false)
+  
   useEffect(() => {
-    if (currentUser) {
+    // Only fetch grants once when user logs in, not on every user object update
+    if (currentUser && !hasFetchedGrants) {
       fetchGrants()
+      setHasFetchedGrants(true)
     }
-  }, [currentUser])
+    // Reset when user logs out
+    if (!currentUser) {
+      setHasFetchedGrants(false)
+    }
+  }, [currentUser, hasFetchedGrants])
 
+  // Apply filters only when grants are loaded initially
+  const hasAppliedInitialFilters = useRef(false)
+  
   useEffect(() => {
-    if (grants.length > 0) {
+    if (grants.length > 0 && !hasAppliedInitialFilters.current) {
+      hasAppliedInitialFilters.current = true
       applyFilters()
     }
-  }, [grants, keyword, opportunityNumber, sourceFilter, statusFilters, fundingInstruments, categoryFilters, sortBy])
+  }, [grants.length])
+
+  // Debounced filter application when filter values change
+  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  useEffect(() => {
+    // Skip if grants not loaded yet
+    if (grants.length === 0 || !hasAppliedInitialFilters.current) return
+    
+    // Debounce filter changes
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current)
+    }
+    
+    filterTimeoutRef.current = setTimeout(() => {
+      applyFilters()
+    }, 150) // 150ms debounce
+    
+    return () => {
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current)
+      }
+    }
+  }, [keyword, opportunityNumber, promptSearch, JSON.stringify(sourceFilter), JSON.stringify(statusFilters), JSON.stringify(fundingInstruments), JSON.stringify(categoryFilters), sortBy, JSON.stringify(dateRangeFilter), JSON.stringify(releaseDateFilter), JSON.stringify(closeDateFilter), JSON.stringify(orbVentFilter), JSON.stringify(programFilter), JSON.stringify(typeFilter), naicsFilter])
+
+  // Load saved searches from server on mount
+  useEffect(() => {
+    const loadSavedSearches = async () => {
+      try {
+        const response = await fetch("/api/shared-data?type=savedSearches")
+        const result = await response.json()
+        if (result.success && result.data) {
+          setSavedSearches(result.data)
+        }
+      } catch { /* ignore */ }
+    }
+    loadSavedSearches()
+  }, [])
+
+  // Save current search
+  const handleSaveSearch = async () => {
+    if (!saveSearchName.trim()) return
+    
+    const newSearch = {
+      id: `search_${Date.now()}`,
+      name: saveSearchName.trim(),
+      createdAt: new Date().toISOString(),
+      filters: {
+        keyword,
+        promptSearch,
+        sourceFilter,
+        statusFilters,
+        orbVentFilter,
+        programFilter,
+        typeFilter,
+        naicsFilter,
+        releaseDateFilter,
+        closeDateFilter,
+        categoryFilters,
+      },
+    }
+    
+    const updatedSearches = [...savedSearches, newSearch]
+    setSavedSearches(updatedSearches)
+    
+    // Sync to server
+    try {
+      await fetch("/api/shared-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "savedSearches", action: "save", data: updatedSearches }),
+      })
+    } catch { /* ignore */ }
+    
+    setSaveSearchName("")
+    setShowSaveSearchModal(false)
+  }
+
+  // Load a saved search
+  const handleLoadSearch = (search: typeof savedSearches[0]) => {
+    setKeyword(search.filters.keyword || "")
+    setPromptSearch(search.filters.promptSearch || "")
+    setSourceFilter(search.filters.sourceFilter || { all: true, usa: false, eu: false, spain: false, other: false })
+    setStatusFilters(search.filters.statusFilters || { forecasted: true, open: true, closed: false, archived: false })
+    setOrbVentFilter(search.filters.orbVentFilter || { all: true, arcOthers: false, bio: false, connect: false, defense: false, molefy: false, nd: false, pulsar: false, space: false, volinga: false, none: false })
+    setProgramFilter(search.filters.programFilter || { all: true, program1: false, program2: false, program3: false, others: false, none: false })
+    setTypeFilter(search.filters.typeFilter || { all: true, grant: false, contract: false, cooperative: false, other: false })
+    setNaicsFilter(search.filters.naicsFilter || "")
+    setReleaseDateFilter(search.filters.releaseDateFilter || { startDate: "", endDate: "" })
+    setCloseDateFilter(search.filters.closeDateFilter || { startDate: "", endDate: "" })
+    setCategoryFilters(search.filters.categoryFilters || { all: true, horizonEurope: false, digitalEurope: false, cybersecurity: false, ai: false, space: false, defense: false })
+    setShowSavedSearches(false)
+  }
+
+  // Delete a saved search
+  const handleDeleteSearch = async (searchId: string) => {
+    const updatedSearches = savedSearches.filter((s) => s.id !== searchId)
+    setSavedSearches(updatedSearches)
+    
+    try {
+      await fetch("/api/shared-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "savedSearches", action: "save", data: updatedSearches }),
+      })
+    } catch { /* ignore */ }
+  }
+
+  // Reset all filters
+  const handleResetFilters = () => {
+    setKeyword("")
+    setPromptSearch("")
+    setOpportunityNumber("")
+    setSourceFilter({ all: true, usa: false, eu: false, spain: false, other: false })
+    setStatusFilters({ forecasted: true, open: true, closed: false, archived: false })
+    setOrbVentFilter({ all: true, arcOthers: false, bio: false, connect: false, defense: false, molefy: false, nd: false, pulsar: false, space: false, volinga: false, none: false })
+    setProgramFilter({ all: true, program1: false, program2: false, program3: false, others: false, none: false })
+    setTypeFilter({ all: true, grant: false, contract: false, cooperative: false, other: false })
+    setNaicsFilter("")
+    setReleaseDateFilter({ startDate: "", endDate: "" })
+    setCloseDateFilter({ startDate: "", endDate: "" })
+    setDateRangeFilter({ enabled: false, startDate: "", endDate: "", dateType: "posted" })
+    setCategoryFilters({ all: true, horizonEurope: false, digitalEurope: false, cybersecurity: false, ai: false, space: false, defense: false })
+    setFundingInstruments({ all: true, researchInnovation: false, innovation: false, coordination: false, cascade: false, simpleGrants: false })
+  }
 
   const fetchGrants = async () => {
     setIsLoading(true)
     try {
-      console.log("[v0] Fetching grants...")
+  
       // Load saved blocklist config
       let blocklist: { ids: string[]; keywords: string[] } | undefined
       try {
@@ -286,9 +473,7 @@ export default function GrantsSearchPage() {
 
       if (response.ok) {
         const result = await response.json()
-        console.log("[v0] API Response:", result)
-        const fetchedGrants = result.data || result.grants || []
-        console.log("[v0] Fetched grants count:", fetchedGrants.length)
+      const fetchedGrants = result.grants || []
         setGrants(fetchedGrants)
         setFilteredGrants(fetchedGrants)
       } else {
@@ -371,6 +556,15 @@ export default function GrantsSearchPage() {
       }
     }
 
+    // Prompt search (natural language - searches across all text fields)
+    if (promptSearch) {
+      const searchTerms = promptSearch.toLowerCase().split(/\s+/).filter((t) => t.length > 2)
+      filtered = filtered.filter((g) => {
+        const searchableText = `${g.title} ${g.description || ""} ${g.agency} ${g.category || ""}`.toLowerCase()
+        return searchTerms.some((term) => searchableText.includes(term))
+      })
+    }
+
     // Keyword filter
     if (keyword) {
       const lowerKeyword = keyword.toLowerCase()
@@ -437,6 +631,67 @@ export default function GrantsSearchPage() {
           return true
 
         return false
+      })
+    }
+
+    // Date range filter (legacy)
+    if (dateRangeFilter.enabled && (dateRangeFilter.startDate || dateRangeFilter.endDate)) {
+      filtered = filtered.filter((g) => {
+        const dateToCheck = dateRangeFilter.dateType === "posted" ? g.postedDate : g.closeDate
+        if (!dateToCheck) return true // Keep grants without dates
+        
+        const grantDate = new Date(dateToCheck).getTime()
+        
+        if (dateRangeFilter.startDate && dateRangeFilter.endDate) {
+          const startMs = new Date(dateRangeFilter.startDate).getTime()
+          const endMs = new Date(dateRangeFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1) // End of day
+          return grantDate >= startMs && grantDate <= endMs
+        } else if (dateRangeFilter.startDate) {
+          const startMs = new Date(dateRangeFilter.startDate).getTime()
+          return grantDate >= startMs
+        } else if (dateRangeFilter.endDate) {
+          const endMs = new Date(dateRangeFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+          return grantDate <= endMs
+        }
+        return true
+      })
+    }
+
+    // Release Date filter (new separate filter)
+    if (releaseDateFilter.startDate || releaseDateFilter.endDate) {
+      filtered = filtered.filter((g) => {
+        if (!g.postedDate) return true
+        const grantDate = new Date(g.postedDate).getTime()
+        
+        if (releaseDateFilter.startDate && releaseDateFilter.endDate) {
+          const startMs = new Date(releaseDateFilter.startDate).getTime()
+          const endMs = new Date(releaseDateFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+          return grantDate >= startMs && grantDate <= endMs
+        } else if (releaseDateFilter.startDate) {
+          return grantDate >= new Date(releaseDateFilter.startDate).getTime()
+        } else if (releaseDateFilter.endDate) {
+          return grantDate <= new Date(releaseDateFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+        }
+        return true
+      })
+    }
+
+    // Close Date filter (new separate filter)
+    if (closeDateFilter.startDate || closeDateFilter.endDate) {
+      filtered = filtered.filter((g) => {
+        if (!g.closeDate) return true
+        const grantDate = new Date(g.closeDate).getTime()
+        
+        if (closeDateFilter.startDate && closeDateFilter.endDate) {
+          const startMs = new Date(closeDateFilter.startDate).getTime()
+          const endMs = new Date(closeDateFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+          return grantDate >= startMs && grantDate <= endMs
+        } else if (closeDateFilter.startDate) {
+          return grantDate >= new Date(closeDateFilter.startDate).getTime()
+        } else if (closeDateFilter.endDate) {
+          return grantDate <= new Date(closeDateFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+        }
+        return true
       })
     }
 
@@ -671,12 +926,12 @@ export default function GrantsSearchPage() {
         {showAlertsPanel && (
           <Card className="mb-6 border-[#1e3a5f] border-2">
             <CardContent className="py-4">
-              <AlertsPanel
-                user={currentUser}
-                onUserUpdate={setCurrentUser}
-                currentFilters={getCurrentFilters()}
-                grants={filteredGrants}
-              />
+<AlertsPanel
+  user={currentUser}
+  onUserUpdate={setCurrentUser}
+  currentFilters={getCurrentFilters()}
+  grants={grants}
+  />
             </CardContent>
           </Card>
         )}
@@ -712,17 +967,130 @@ export default function GrantsSearchPage() {
             <div className="lg:col-span-1">
               <Card className="border-[#d1d5db]">
                 <CardContent className="p-4">
-                  <h2 className="font-semibold text-[#1e3a5f] mb-4 text-lg">Filters</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-semibold text-[#1e3a5f] text-lg">Filters</h2>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowSaveSearchModal(true)}
+                        className="h-7 px-2 text-xs"
+                        title="Save Search"
+                      >
+                        <Save className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowSavedSearches(!showSavedSearches)}
+                        className="h-7 px-2 text-xs"
+                        title="Saved Searches"
+                      >
+                        <FolderOpen className="h-3 w-3" />
+                        {savedSearches.length > 0 && (
+                          <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5 text-xs">{savedSearches.length}</span>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleResetFilters}
+                        className="h-7 px-2 text-xs"
+                        title="Reset Filters"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
 
-                  {/* Source Filter */}
+                  {/* Save Search Modal */}
+                  {showSaveSearchModal && (
+                    <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <h4 className="text-sm font-medium text-blue-800 mb-2">Save Current Search</h4>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Search name..."
+                          value={saveSearchName}
+                          onChange={(e) => setSaveSearchName(e.target.value)}
+                          className="text-sm h-8"
+                        />
+                        <Button size="sm" onClick={handleSaveSearch} disabled={!saveSearchName.trim()} className="h-8">
+                          Save
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setShowSaveSearchModal(false)} className="h-8">
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Saved Searches List */}
+                  {showSavedSearches && savedSearches.length > 0 && (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                        <Bookmark className="h-3 w-3" /> Saved Searches
+                      </h4>
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {savedSearches.map((search) => (
+                          <div key={search.id} className="flex items-center justify-between p-2 bg-white rounded border hover:bg-gray-50">
+                            <button
+                              onClick={() => handleLoadSearch(search)}
+                              className="text-sm text-left flex-1 text-blue-600 hover:underline"
+                            >
+                              {search.name}
+                            </button>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-gray-400">{new Date(search.createdAt).toLocaleDateString()}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteSearch(search.id)}
+                                className="h-6 w-6 p-0 text-red-400 hover:text-red-600"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prompt Field */}
                   <div className="mb-6">
-                    <h3 className="font-medium text-sm mb-2 text-gray-700">Source</h3>
+                    <h3 className="font-medium text-sm mb-2 text-gray-700 flex items-center gap-1">
+                      <Sparkles className="h-4 w-4 text-purple-500" />
+                      Prompt
+                    </h3>
+                    <textarea
+                      placeholder="Describe in natural language the type of funding opportunity you want to find..."
+                      value={promptSearch}
+                      onChange={(e) => setPromptSearch(e.target.value)}
+                      className="w-full text-sm p-2 border rounded-md resize-none h-20 focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                    />
+                  </div>
+
+                  {/* Keywords Field */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Keywords</h3>
+                    <Input
+                      placeholder="Enter keywords..."
+                      value={keyword}
+                      onChange={(e) => setKeyword(e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  {/* Region Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Region</h3>
                     <div className="space-y-2">
                       {[
-                        { key: "all", label: "All Sources", icon: Globe },
-                        { key: "usa", label: "USA (Grants.gov)", icon: Flag },
-                        { key: "eu", label: "EU (Funding & Tenders)", icon: Globe },
+                        { key: "all", label: "All Regions", icon: Globe },
+                        { key: "usa", label: "US (Grants.gov)", icon: Flag },
+                        { key: "eu", label: "Europe (Funding & Tenders)", icon: Globe },
                         { key: "spain", label: "Spain (Subvenciones)", icon: Flag },
+                        { key: "other", label: "Other", icon: Globe },
                       ].map(({ key, label, icon: Icon }) => (
                         <div key={key} className="flex items-center space-x-2">
                           <Checkbox
@@ -784,6 +1152,90 @@ export default function GrantsSearchPage() {
                     </div>
                   </div>
 
+                  {/* Release Date Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700 flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      Release Date
+                    </h3>
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="release-start-date" className="text-xs text-gray-500">From:</Label>
+                        <Input
+                          type="date"
+                          id="release-start-date"
+                          value={releaseDateFilter.startDate}
+                          onChange={(e) => setReleaseDateFilter((prev) => ({ ...prev, startDate: e.target.value }))}
+                          className="text-sm h-8"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="release-end-date" className="text-xs text-gray-500">To:</Label>
+                        <Input
+                          type="date"
+                          id="release-end-date"
+                          value={releaseDateFilter.endDate}
+                          onChange={(e) => setReleaseDateFilter((prev) => ({ ...prev, endDate: e.target.value }))}
+                          className="text-sm h-8"
+                        />
+                      </div>
+                      {(releaseDateFilter.startDate || releaseDateFilter.endDate) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setReleaseDateFilter({ startDate: "", endDate: "" })}
+                          className="text-xs h-6 w-full text-gray-500"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Close Date Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700 flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      Close Date
+                    </h3>
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="close-start-date" className="text-xs text-gray-500">From:</Label>
+                        <Input
+                          type="date"
+                          id="close-start-date"
+                          value={closeDateFilter.startDate}
+                          onChange={(e) => setCloseDateFilter((prev) => ({ ...prev, startDate: e.target.value }))}
+                          className="text-sm h-8"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="close-end-date" className="text-xs text-gray-500">To:</Label>
+                        <Input
+                          type="date"
+                          id="close-end-date"
+                          value={closeDateFilter.endDate}
+                          onChange={(e) => setCloseDateFilter((prev) => ({ ...prev, endDate: e.target.value }))}
+                          className="text-sm h-8"
+                        />
+                      </div>
+                      {(closeDateFilter.startDate || closeDateFilter.endDate) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setCloseDateFilter({ startDate: "", endDate: "" })}
+                          className="text-xs h-6 w-full text-gray-500"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                      {/* Hint about closed opportunities */}
+                      <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded mt-2">
+                        Enable &quot;Closed&quot; status filter to see past opportunities
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Category Filter */}
                   <div className="mb-6">
                     <h3 className="font-medium text-sm mb-2 text-gray-700">Category</h3>
@@ -837,6 +1289,139 @@ export default function GrantsSearchPage() {
                     </div>
                   </div>
 
+                  {/* ORB/Vent Filter (ARQUIMEA Business Units) */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">ORB/Vent</h3>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {[
+                        { key: "all", label: "All" },
+                        { key: "arcOthers", label: "ARC-OTHERS" },
+                        { key: "bio", label: "BIO" },
+                        { key: "connect", label: "CONNECT" },
+                        { key: "defense", label: "DEFENSE" },
+                        { key: "molefy", label: "MOLEFY" },
+                        { key: "nd", label: "ND" },
+                        { key: "pulsar", label: "PULSAR" },
+                        { key: "space", label: "SPACE" },
+                        { key: "volinga", label: "VOLINGA" },
+                        { key: "none", label: "None" },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`orb-${key}`}
+                            checked={orbVentFilter[key as keyof typeof orbVentFilter]}
+                            onCheckedChange={(checked) => {
+                              if (key === "all") {
+                                setOrbVentFilter({
+                                  all: true,
+                                  arcOthers: false, bio: false, connect: false, defense: false,
+                                  molefy: false, nd: false, pulsar: false, space: false, volinga: false, none: false,
+                                })
+                              } else {
+                                setOrbVentFilter((prev) => ({
+                                  ...prev,
+                                  all: false,
+                                  [key]: !!checked,
+                                }))
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`orb-${key}`} className="text-sm cursor-pointer">
+                            {label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Program / TechMap Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Program / TechMap</h3>
+                    <div className="space-y-2">
+                      {[
+                        { key: "all", label: "All" },
+                        { key: "program1", label: "Program 1" },
+                        { key: "program2", label: "Program 2" },
+                        { key: "program3", label: "Program 3" },
+                        { key: "others", label: "Others" },
+                        { key: "none", label: "None" },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`program-${key}`}
+                            checked={programFilter[key as keyof typeof programFilter]}
+                            onCheckedChange={(checked) => {
+                              if (key === "all") {
+                                setProgramFilter({
+                                  all: true,
+                                  program1: false, program2: false, program3: false, others: false, none: false,
+                                })
+                              } else {
+                                setProgramFilter((prev) => ({
+                                  ...prev,
+                                  all: false,
+                                  [key]: !!checked,
+                                }))
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`program-${key}`} className="text-sm cursor-pointer">
+                            {label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Type Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Type</h3>
+                    <div className="space-y-2">
+                      {[
+                        { key: "all", label: "All Types" },
+                        { key: "grant", label: "Grant" },
+                        { key: "contract", label: "Contract" },
+                        { key: "cooperative", label: "Cooperative Agreement" },
+                        { key: "other", label: "Other" },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`type-${key}`}
+                            checked={typeFilter[key as keyof typeof typeFilter]}
+                            onCheckedChange={(checked) => {
+                              if (key === "all") {
+                                setTypeFilter({
+                                  all: true,
+                                  grant: false, contract: false, cooperative: false, other: false,
+                                })
+                              } else {
+                                setTypeFilter((prev) => ({
+                                  ...prev,
+                                  all: false,
+                                  [key]: !!checked,
+                                }))
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`type-${key}`} className="text-sm cursor-pointer">
+                            {label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* NAICS Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">NAICS Code</h3>
+                    <Input
+                      placeholder="Enter NAICS code..."
+                      value={naicsFilter}
+                      onChange={(e) => setNaicsFilter(e.target.value)}
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Optional: filter by industry code</p>
+                  </div>
 
                 </CardContent>
               </Card>
@@ -890,16 +1475,28 @@ export default function GrantsSearchPage() {
                   </Button>
                 )}
                       </div>
-                      <select
-                        className="text-sm border rounded px-2 py-1"
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                      >
-                        <option value="posted-desc">Posted Date (Newest)</option>
-                        <option value="posted-asc">Posted Date (Oldest)</option>
-                        <option value="close-desc">Close Date (Latest)</option>
-                        <option value="close-asc">Close Date (Soonest)</option>
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportGrantsToExcelXLSX(filteredGrants)}
+                          disabled={filteredGrants.length === 0 || isLoading}
+                          className="flex items-center gap-1 text-xs h-8"
+                        >
+                          <Download className="h-3 w-3" />
+                          Excel
+                        </Button>
+                        <select
+                          className="text-sm border rounded px-2 py-1"
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                        >
+                          <option value="posted-desc">Posted Date (Newest)</option>
+                          <option value="posted-asc">Posted Date (Oldest)</option>
+                          <option value="close-desc">Close Date (Latest)</option>
+                          <option value="close-asc">Close Date (Soonest)</option>
+                        </select>
+                      </div>
                       </div>
                   </div>
 

@@ -19,7 +19,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UserService, type User, type UserAlert } from "@/lib/user-service"
 import { ARQUIMEA_PROGRAMS } from "@/components/gpt-sync-panel"
-import { Bell, Plus, Trash2, Mail, Loader2, Send, Bot } from "lucide-react"
+import { Bell, Plus, Trash2, Mail, Loader2, Send, Bot, Download } from "lucide-react"
+import { exportAlertMatchesToExcel } from "@/lib/excel-export"
 
 interface AlertsPanelProps {
   user: User
@@ -76,32 +77,13 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       })
 
       if (result.success) {
-        console.log("[v0] Alert created successfully:", result.alert?.id)
-        
-        // Fetch the latest alerts from server to confirm save
-        try {
-          const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
-          const serverResult = await response.json()
-          console.log("[v0] Server alerts after creation:", serverResult.data?.length)
-          
-          if (serverResult.success && serverResult.data) {
-            const updatedUser = { ...user, alerts: serverResult.data }
-            localStorage.setItem("arquimea_current_user", JSON.stringify(updatedUser))
-            onUserUpdate(updatedUser)
-          } else {
-            const updatedUser = userService.getCurrentUser()
-            if (updatedUser) {
-              onUserUpdate(updatedUser)
-            }
-          }
-        } catch (e) {
-          const updatedUser = userService.getCurrentUser()
-          if (updatedUser) {
-            onUserUpdate(updatedUser)
-          }
+        // Update user with new alert from local storage (source of truth)
+        const updatedUser = userService.getCurrentUser()
+        if (updatedUser) {
+          onUserUpdate(updatedUser)
         }
         
-        setMessage({ type: "success", text: "Alerta creada y guardada en memoria!" })
+        setMessage({ type: "success", text: "Alerta creada y guardada!" })
         setTimeout(() => {
           setIsCreateModalOpen(false)
           setAlertName("")
@@ -122,21 +104,7 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
   const handleDeleteAlert = async (alertId: string) => {
     const result = await userService.deleteAlert(user.id, alertId)
     if (result.success) {
-      console.log("[v0] Alert deleted:", alertId)
-      
-      // Fetch the latest alerts from server to confirm deletion
-      try {
-        const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
-        const serverResult = await response.json()
-        
-        if (serverResult.success && serverResult.data) {
-          const updatedUser = { ...user, alerts: serverResult.data }
-          localStorage.setItem("arquimea_current_user", JSON.stringify(updatedUser))
-          onUserUpdate(updatedUser)
-          return
-        }
-      } catch { /* fallback to local */ }
-      
+      // Update from local storage (source of truth)
       const updatedUser = userService.getCurrentUser()
       if (updatedUser) {
         onUserUpdate(updatedUser)
@@ -493,6 +461,14 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
                       />
                       <Mail className={`h-4 w-4 ${alert.emailNotifications ? "text-[#1e3a5f]" : "text-gray-300"}`} />
                     </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => exportAlertMatchesToExcel(alert, grants)}
+                      title="Download matching grants as Excel"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"

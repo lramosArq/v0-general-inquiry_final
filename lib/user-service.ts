@@ -316,13 +316,11 @@ export class UserService {
       localStorage.setItem(this.currentUserKey, JSON.stringify(users[userIndex]))
     }
 
-    // Sync to shared server
+    // Sync to shared server (fire and forget - local is source of truth)
     try {
-      console.log("[v0] Syncing new alert to server for user:", userId)
-      const serverAlerts = await sharedDataService.addAlert(userId, newAlert)
-      console.log("[v0] Alert synced to server, total alerts:", serverAlerts?.length)
-    } catch (e) {
-      console.log("[v0] Could not sync alert to server:", e)
+      await sharedDataService.addAlert(userId, newAlert)
+    } catch {
+      // Ignore sync errors - local data is preserved
     }
 
     return { success: true, message: "Alerta creada exitosamente", alert: newAlert }

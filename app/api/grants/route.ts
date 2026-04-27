@@ -23,6 +23,68 @@ function isBlockedGrant(
   return false
 }
 
+function generateDirectUrl(grant: any, source: "usa" | "eu" | "spain"): string {
+  const id = grant.id || grant.expedient || ""
+  const title = grant.title || ""
+  
+  // If a specific URL exists and is not a generic portal URL, use it
+  const existingUrl = grant.url || grant.sourceUrl || ""
+  const genericPatterns = [
+    "/convocatorias",
+    "/buscador",
+    "/Paginas/Index",
+    "/index.aspx",
+    "portal/screen/opportunities/topic-search",
+  ]
+  const isGenericUrl = genericPatterns.some(pattern => existingUrl.includes(pattern))
+  
+  if (existingUrl && !isGenericUrl) {
+    return existingUrl
+  }
+  
+  // Generate direct URL based on source
+  switch (source) {
+    case "usa":
+      // For Grants.gov - use search-results-detail if we have numeric ID
+      if (/^\d+$/.test(id)) {
+        return `https://www.grants.gov/search-results-detail/${id}`
+      }
+      // For SAM.gov opportunities
+      if (id.includes("SAM") || grant.portal === "SAM.gov") {
+        return `https://sam.gov/search?keywords=${encodeURIComponent(id)}&sort=-relevance&index=opp`
+      }
+      return `https://www.grants.gov/search?keywords=${encodeURIComponent(title.substring(0, 50))}`
+      
+    case "eu":
+      // EU Funding & Tenders Portal - search by title for reliable results
+      const searchTerm = title ? title.substring(0, 60) : id
+      return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search?keywords=${encodeURIComponent(searchTerm)}`
+      
+    case "spain":
+      // Spain - generate search URL based on portal
+      const portal = (grant.portal || "").toLowerCase()
+      if (portal.includes("cdti")) {
+        return `https://www.cdti.es/ayudas`
+      }
+      if (portal.includes("aei")) {
+        return `https://www.aei.gob.es/convocatorias/buscador-convocatorias`
+      }
+      if (portal.includes("prtr")) {
+        return `https://planderecuperacion.gob.es/como-acceder-a-los-fondos/convocatorias`
+      }
+      if (portal.includes("bdns")) {
+        // BDNS has a search by expedient
+        const expedient = grant.expedient || id
+        return `https://www.pap.hacienda.gob.es/bdnstrans/GE/es/convocatorias?convocatoria=${encodeURIComponent(expedient)}`
+      }
+      // Default: BDNS general search with title
+      return `https://www.pap.hacienda.gob.es/bdnstrans/GE/es/convocatorias?texto=${encodeURIComponent(title.substring(0, 50))}`
+      
+    default:
+      return existingUrl || "#"
+  }
+}
+
 function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
   return {
     id: grant.id,
@@ -36,7 +98,7 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
     category: grant.category,
     fundingInstrument: grant.amount || grant.type,
     source: source,
-    url: grant.url || grant.sourceUrl,
+    url: generateDirectUrl(grant, source),
     portal: grant.portal || undefined,
   }
 }
@@ -146,7 +208,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: allGrants,
+      grants: allGrants,
+      data: allGrants, // backward compatibility
       total: allGrants.length,
       sources: {
         usa: allGrants.filter((g) => g.source === "usa").length,
@@ -162,7 +225,8 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        data: [],
+        grants: [],
+        data: [], // backward compatibility
         total: 0,
       },
       { status: 500 },
@@ -232,7 +296,8 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      data: allGrants,
+      grants: allGrants,
+      data: allGrants, // backward compatibility
       total: allGrants.length,
       sources: {
         usa: allGrants.filter((g) => g.source === "usa").length,
@@ -248,7 +313,8 @@ export async function GET() {
       {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        data: [],
+        grants: [],
+        data: [], // backward compatibility
         total: 0,
       },
       { status: 500 },

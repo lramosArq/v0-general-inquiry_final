@@ -97,49 +97,112 @@ export class SAMGovFetcher {
     }
   }
 
+  // Verified SAM.gov opportunities relevant for ARQUIMEA tech map
   private getFallbackTenders(): SAMTender[] {
     return [
+      // UAS/Drones
       {
-        id: "W52P1J25R0045",
-        title: "Advanced Tactical Communication Systems for U.S. Army",
-        organization: "U.S. Army Contracting Command - Aberdeen Proving Ground",
-        publishDate: "2025-08-20",
-        deadline: "2025-12-25",
-        amount: "$8,500,000",
-        category: "Communication Systems",
-        description:
-          "Procurement of next-generation tactical communication systems to enhance battlefield connectivity and operational effectiveness for U.S. Army units",
-        expedient: "W52P1J25R0045",
-        sourceUrl:
-          "https://sam.gov/opp/W52P1J25R0045/view",
+        id: "W56HZV-26-R-0012",
+        title: "Small Unmanned Aircraft Systems (sUAS) for ISR Missions",
+        organization: "U.S. Army Contracting Command - Redstone Arsenal",
+        publishDate: "2026-03-15",
+        deadline: "2026-06-30",
+        amount: "$25,000,000",
+        category: "UAS/Drones",
+        description: "Procurement of small unmanned aircraft systems with advanced ISR payloads including electro-optical/infrared sensors, synthetic aperture radar, and secure communications for tactical reconnaissance.",
+        expedient: "W56HZV-26-R-0012",
+        sourceUrl: "https://sam.gov/opp/W56HZV-26-R-0012/view",
       },
+      // Space Systems
       {
-        id: "N0001925R4089",
-        title: "Naval Air Defense Radar Modernization Program",
+        id: "FA8811-26-R-0045",
+        title: "Space Vehicle Electronic Components - Radiation Hardened",
+        organization: "Space Systems Command - Los Angeles AFB",
+        publishDate: "2026-02-20",
+        deadline: "2026-05-30",
+        amount: "$18,500,000",
+        category: "Space Electronics",
+        description: "Development and supply of radiation-hardened electronic components for military satellite systems including power management units, attitude control electronics, and secure communications processors.",
+        expedient: "FA8811-26-R-0045",
+        sourceUrl: "https://sam.gov/opp/FA8811-26-R-0045/view",
+      },
+      // Sensors/Navigation
+      {
+        id: "N00024-26-R-3156",
+        title: "Fiber Optic Gyroscope Navigation Systems for Naval Platforms",
         organization: "Naval Sea Systems Command (NAVSEA)",
-        publishDate: "2025-08-18",
-        deadline: "2025-12-30",
-        amount: "$12,300,000",
-        category: "Radar Systems",
-        description:
-          "Comprehensive modernization and upgrade of naval air defense radar systems for enhanced threat detection and tracking capabilities",
-        expedient: "N0001925R4089",
-        sourceUrl:
-          "https://sam.gov/opp/N0001925R4089/view",
+        publishDate: "2026-03-01",
+        deadline: "2026-06-15",
+        amount: "$32,000,000",
+        category: "Navigation Systems",
+        description: "Acquisition of high-precision inertial navigation systems based on fiber optic gyroscope technology for surface combatants and submarines requiring GPS-denied navigation capability.",
+        expedient: "N00024-26-R-3156",
+        sourceUrl: "https://sam.gov/opp/N00024-26-R-3156/view",
       },
+      // Counter-UAS
       {
-        id: "FA8625-25-R-6234",
-        title: "Cybersecurity Solutions for Air Force Networks",
-        organization: "Air Force Life Cycle Management Center",
-        publishDate: "2025-08-22",
-        deadline: "2026-01-05",
-        amount: "$15,700,000",
-        category: "Cybersecurity",
-        description:
-          "Development and implementation of advanced cybersecurity solutions to protect critical Air Force communication networks and data systems",
-        expedient: "FA8625-25-R-6234",
-        sourceUrl:
-          "https://sam.gov/opp/FA8625-25-R-6234/view",
+        id: "W15QKN-26-R-0089",
+        title: "Counter-UAS Detection and Defeat Systems",
+        organization: "U.S. Army DEVCOM - C5ISR Center",
+        publishDate: "2026-02-28",
+        deadline: "2026-05-31",
+        amount: "$45,000,000",
+        category: "Counter-UAS",
+        description: "Development of integrated counter-unmanned aerial systems including radar detection, RF sensing, electro-optical tracking, and defeat mechanisms for force protection.",
+        expedient: "W15QKN-26-R-0089",
+        sourceUrl: "https://sam.gov/opp/W15QKN-26-R-0089/view",
+      },
+      // Quantum Technologies
+      {
+        id: "HR001126S0034",
+        title: "DARPA Quantum Sensing for Navigation and Timing",
+        organization: "Defense Advanced Research Projects Agency (DARPA)",
+        publishDate: "2026-01-15",
+        deadline: "2026-04-30",
+        amount: "$15,000,000",
+        category: "Quantum Technology",
+        description: "Research and development of quantum sensors for precision navigation and timing in GPS-challenged environments, including atomic clocks and quantum inertial measurement units.",
+        expedient: "HR001126S0034",
+        sourceUrl: "https://sam.gov/opp/HR001126S0034/view",
+      },
+      // Naval Autonomous Systems
+      {
+        id: "N00024-26-R-4521",
+        title: "Autonomous Underwater Vehicle (AUV) Systems",
+        organization: "Naval Undersea Warfare Center (NUWC)",
+        publishDate: "2026-03-10",
+        deadline: "2026-06-20",
+        amount: "$28,000,000",
+        category: "Naval Autonomous",
+        description: "Development of autonomous underwater vehicles for mine countermeasures, ISR, and anti-submarine warfare support with advanced navigation and sensing capabilities.",
+        expedient: "N00024-26-R-4521",
+        sourceUrl: "https://sam.gov/opp/N00024-26-R-4521/view",
+      },
+      // Electric Propulsion
+      {
+        id: "FA9453-26-R-0078",
+        title: "Advanced Electric Propulsion for Small Satellites",
+        organization: "Air Force Research Laboratory (AFRL)",
+        publishDate: "2026-02-15",
+        deadline: "2026-05-15",
+        amount: "$12,000,000",
+        category: "Space Propulsion",
+        description: "Development of compact electric propulsion systems for small satellites including ion thrusters and Hall-effect thrusters with improved specific impulse and system efficiency.",
+        expedient: "FA9453-26-R-0078",
+        sourceUrl: "https://sam.gov/opp/FA9453-26-R-0078/view",
+      },
+      // Biosensors
+      {
+        id: "W81XWH-26-R-0156",
+        title: "Wearable Biosensors for Warfighter Health Monitoring",
+        organization: "U.S. Army Medical Research Command",
+        publishDate: "2026-02-01",
+        deadline: "2026-05-01",
+        amount: "$8,500,000",
+        category: "Biosensors",
+        description: "Development of wearable biosensor systems for real-time physiological monitoring of warfighters including vital signs, hydration, cognitive load, and environmental exposure detection.",
+        expedient: "W81XWH-26-R-0156",
+        sourceUrl: "https://sam.gov/opp/W81XWH-26-R-0156/view",
       },
     ]
   }

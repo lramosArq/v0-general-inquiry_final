@@ -196,6 +196,22 @@ export async function POST(request: Request) {
       </html>
     `
 
+    // Check if we're in test mode (using resend.dev domain)
+    const isTestMode = fromEmail.includes("resend.dev")
+    const allowedTestEmail = "lramos@arquimea.com"
+    
+    // In test mode, can only send to the account owner's email
+    if (isTestMode && to !== allowedTestEmail) {
+      console.log("[v0] Test mode restriction: redirecting to allowed email")
+      return NextResponse.json({ 
+        success: false,
+        error: `En modo de prueba (sin dominio verificado), solo se puede enviar a ${allowedTestEmail}. El email del destinatario (${to}) no esta permitido.`,
+        testModeRestriction: true,
+        allowedEmail: allowedTestEmail,
+        suggestion: "Configure RESEND_FROM_EMAIL con un dominio verificado en Resend para enviar a cualquier destinatario."
+      }, { status: 403 })
+    }
+
     const { data, error } = await resend.emails.send({
       from: fromEmail,
       to: [to],
@@ -205,18 +221,18 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error("[v0] Error sending email:", error)
-      // Check for common Resend errors
       const errorMessage = error.message || "Unknown error"
       let userFriendlyMessage = errorMessage
       
-      if (errorMessage.includes("not verified") || errorMessage.includes("verify")) {
-        userFriendlyMessage = `Cannot send to ${to}. With Resend's free tier (onboarding@resend.dev), you can only send to your verified email address. To send to other emails, you need to verify a custom domain in Resend.`
+      if (errorMessage.includes("only send testing emails") || errorMessage.includes("verify a domain")) {
+        userFriendlyMessage = `En modo de prueba, solo se puede enviar a ${allowedTestEmail}. Configure un dominio verificado en Resend para enviar a otros destinatarios.`
       }
       
       return NextResponse.json({ 
+        success: false,
         error: userFriendlyMessage, 
         details: errorMessage,
-        suggestion: "Verify your domain in Resend or use the email associated with your Resend account"
+        testModeRestriction: errorMessage.includes("testing emails"),
       }, { status: 500 })
     }
 

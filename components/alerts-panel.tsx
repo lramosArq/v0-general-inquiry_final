@@ -299,22 +299,27 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
         }
       } else {
         console.error("[v0] Send alert error:", result)
-        // Show detailed error message
+        // Show detailed error message with special handling for test mode restriction
         let errorMsg = result.error || "Failed to send alert"
-        if (result.details) {
-          errorMsg += ` (${result.details})`
-        }
-        if (result.suggestion) {
-          errorMsg += `. ${result.suggestion}`
+        
+        if (result.testModeRestriction) {
+          errorMsg = `Modo de prueba: Solo se puede enviar a ${result.allowedEmail || "lramos@arquimea.com"}. Para enviar a otros destinatarios, configure un dominio verificado en Resend.`
+        } else {
+          if (result.details) {
+            errorMsg += ` (${result.details})`
+          }
+          if (result.suggestion) {
+            errorMsg += `. ${result.suggestion}`
+          }
         }
         setMessage({ type: "error", text: errorMsg })
       }
     } catch (error) {
       console.error("[v0] Error sending alert:", error)
-      setMessage({ type: "error", text: "Failed to send alert email" })
+      setMessage({ type: "error", text: "Error al enviar la alerta por email" })
     } finally {
       setIsSendingAlert(null)
-      setTimeout(() => setMessage({ type: "", text: "" }), 3000)
+      setTimeout(() => setMessage({ type: "", text: "" }), 8000) // Show error longer for test mode messages
     }
   }
 

@@ -1,8 +1,34 @@
 /**
  * Spain Grants/Subsidies Fetcher
  * Fetches grants from Base de Datos Nacional de Subvenciones (BDNS) API
- * Only returns real data from official Spanish government sources
+ * Filtered for ARQUIMEA tech map: aerospace, defense, space, sensors, etc.
  */
+
+// ARQUIMEA tech map keywords for Spain filtering
+const ARQUIMEA_ES_KEYWORDS = [
+  // UAS/UAV/Drones
+  "UAS", "UAV", "dron", "drone", "RPAS", "aeronave no tripulada",
+  // Space & Satellite
+  "espacio", "espacial", "satelite", "orbita", "cohete", "lanzador",
+  // Defense
+  "defensa", "militar", "armamento", "DGAM", "ejercito",
+  // Sensors & ISR
+  "sensor", "radar", "lidar", "vigilancia", "optico", "infrarrojo",
+  // Quantum & Photonics
+  "cuantico", "quantum", "fotonico", "giroscopo", "inercial",
+  // Naval & Maritime
+  "maritimo", "naval", "buque", "submarino",
+  // Communications
+  "comunicaciones", "antena", "SATCOM",
+  // Robotics
+  "robotica", "robot", "actuador", "exoesqueleto",
+  // Aerospace
+  "aeroespacial", "aeronautico", "propulsion", "aviacion",
+  // Innovation programs
+  "CDTI", "I+D+i", "innovacion", "tecnologia", "investigacion",
+  // Biosensors
+  "biosensor", "biomedicina",
+]
 
 export interface SpainGrant {
   id: string
@@ -23,17 +49,40 @@ export class SpainGrantsFetcher {
   // BDNS API endpoint (Base de Datos Nacional de Subvenciones)
   private bdnsApiUrl = "https://www.pap.hacienda.gob.es/bdnstrans/api/convocatorias"
 
-  async fetchAllGrants(keyword?: string): Promise<SpainGrant[]> {
-    console.log("[v0] Spain - Fetching grants from BDNS API...")
+  // Check if opportunity matches ARQUIMEA tech map
+  private matchesArquimeaTechMap(title: string, description: string, category: string): boolean {
+    const text = `${title} ${description} ${category}`.toLowerCase()
+    return ARQUIMEA_ES_KEYWORDS.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()))
+  }
 
-    try {
-      const grants = await this.fetchFromBDNS(keyword)
-      console.log(`[v0] Spain - Total grants from API: ${grants.length}`)
-      return grants
-    } catch (error) {
-      console.error("[v0] Spain - Error fetching from BDNS:", error)
-      return []
+  async fetchAllGrants(keyword?: string): Promise<SpainGrant[]> {
+    console.log("[v0] Spain - Fetching grants from BDNS API (ARQUIMEA tech map)...")
+
+    const allGrants: SpainGrant[] = []
+
+    // Search with multiple ARQUIMEA-relevant terms
+    const searchTerms = ["defensa", "espacio", "aeroespacial", "I+D", "tecnologia"]
+    
+    for (const term of searchTerms) {
+      try {
+        const grants = await this.fetchFromBDNS(term)
+        const relevant = grants.filter(g => 
+          this.matchesArquimeaTechMap(g.title, g.description, g.category)
+        )
+        allGrants.push(...relevant)
+        console.log(`[v0] Spain - BDNS "${term}": ${relevant.length} relevant`)
+      } catch (error) {
+        console.error(`[v0] Spain - BDNS "${term}" error:`, error)
+      }
     }
+
+    // Remove duplicates by ID
+    const uniqueGrants = allGrants.filter((grant, index, self) =>
+      index === self.findIndex(g => g.id === grant.id)
+    )
+
+    console.log(`[v0] Spain - Total ARQUIMEA-relevant grants: ${uniqueGrants.length}`)
+    return uniqueGrants
   }
 
   private async fetchFromBDNS(keyword?: string): Promise<SpainGrant[]> {

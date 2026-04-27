@@ -1,8 +1,34 @@
 /**
  * USA Grants Fetcher
  * Fetches grants from Grants.gov API (real federal grants)
- * Also includes verified SAM.gov opportunities with real URLs
+ * Filtered for ARQUIMEA tech map: UAS/UAV, defense, space, sensors, quantum, etc.
  */
+
+// ARQUIMEA tech map keywords for filtering
+const ARQUIMEA_KEYWORDS = [
+  // UAS/UAV/Drones
+  "UAS", "UAV", "drone", "unmanned", "loitering munition", "counter-UAS", "C-UAS",
+  // Space & Satellite
+  "space", "satellite", "smallsat", "cubesat", "orbit", "spacecraft", "launch",
+  // Defense & EW
+  "defense", "defence", "military", "electronic warfare", "EW", "radar", "countermeasure",
+  // ISR & Sensors
+  "ISR", "surveillance", "reconnaissance", "sensor", "lidar", "optical", "infrared", "IR",
+  // Naval
+  "USV", "UUV", "autonomous vessel", "maritime", "naval", "submarine",
+  // Communications
+  "secure communication", "encrypted", "SATCOM", "antenna",
+  // Quantum & Photonics
+  "quantum", "photonic", "gyroscope", "inertial", "navigation",
+  // Robotics & Motors
+  "robotic", "actuator", "motor", "exoskeleton",
+  // Aerospace
+  "aerospace", "propulsion", "thruster", "dual-use",
+  // Biosensors
+  "biosensor", "microfluidic",
+  // R&D Programs
+  "SBIR", "STTR", "BAA", "DARPA", "DIU", "AFWERX",
+]
 
 export interface GrantsGovGrant {
   id: string
@@ -19,44 +45,49 @@ export interface GrantsGovGrant {
 }
 
 export class GrantsGovFetcher {
+  // Check if opportunity matches ARQUIMEA tech map
+  private matchesArquimeaTechMap(title: string, description: string, category: string): boolean {
+    const text = `${title} ${description} ${category}`.toLowerCase()
+    return ARQUIMEA_KEYWORDS.some(keyword => text.includes(keyword.toLowerCase()))
+  }
+
   async fetchAllGrants(keyword?: string): Promise<GrantsGovGrant[]> {
-    console.log("[v0] USA - Fetching grants from Grants.gov API...")
+    console.log("[v0] USA - Fetching grants from Grants.gov API (ARQUIMEA tech map)...")
 
     const allGrants: GrantsGovGrant[] = []
 
-    // Fetch from Grants.gov API
-    try {
-      const apiGrants = await this.fetchFromGrantsGovAPI(keyword)
-      allGrants.push(...apiGrants)
-      console.log(`[v0] USA - Grants.gov API returned: ${apiGrants.length}`)
-    } catch (error) {
-      console.error("[v0] USA - Grants.gov API error:", error)
-    }
-
-    // Add verified SAM.gov opportunities (these are real URLs that have been verified)
-    const samGrants = this.getVerifiedSAMGrants()
+    // Fetch from Grants.gov API with multiple ARQUIMEA-relevant keywords
+    const searchTerms = ["defense", "space", "UAV", "sensor", "quantum"]
     
-    // Filter SAM grants by keyword if provided
-    if (keyword && keyword !== "all" && keyword !== "*" && keyword !== "grant") {
-      const searchTerm = keyword.toLowerCase()
-      const filteredSam = samGrants.filter(
-        (g) =>
-          g.title.toLowerCase().includes(searchTerm) ||
-          g.organization.toLowerCase().includes(searchTerm) ||
-          g.category.toLowerCase().includes(searchTerm) ||
-          g.description.toLowerCase().includes(searchTerm),
-      )
-      allGrants.push(...filteredSam)
-    } else {
-      allGrants.push(...samGrants)
+    for (const term of searchTerms) {
+      try {
+        const apiGrants = await this.fetchFromGrantsGovAPI(term)
+        // Filter for ARQUIMEA relevance
+        const relevant = apiGrants.filter(g => 
+          this.matchesArquimeaTechMap(g.title, g.description, g.category)
+        )
+        allGrants.push(...relevant)
+        console.log(`[v0] USA - Grants.gov "${term}": ${relevant.length} relevant`)
+      } catch (error) {
+        console.error(`[v0] USA - Grants.gov "${term}" error:`, error)
+      }
     }
 
-    console.log(`[v0] USA - Total grants: ${allGrants.length}`)
-    return allGrants
+    // Add verified SAM.gov opportunities (pre-filtered for ARQUIMEA)
+    const samGrants = this.getVerifiedSAMGrants()
+    allGrants.push(...samGrants)
+
+    // Remove duplicates by ID
+    const uniqueGrants = allGrants.filter((grant, index, self) =>
+      index === self.findIndex(g => g.id === grant.id)
+    )
+
+    console.log(`[v0] USA - Total ARQUIMEA-relevant grants: ${uniqueGrants.length}`)
+    return uniqueGrants
   }
 
   private async fetchFromGrantsGovAPI(keyword?: string): Promise<GrantsGovGrant[]> {
-    const searchKeyword = keyword && keyword !== "all" && keyword !== "*" ? keyword : "technology"
+    const searchKeyword = keyword || "defense"
 
     const response = await fetch("https://api.grants.gov/v1/api/search2", {
       method: "POST",

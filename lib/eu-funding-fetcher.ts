@@ -74,8 +74,11 @@ export class EUFundingFetcher {
       return data.result.results
         .filter((item: any) => {
           // Filter for funding/tender related datasets
-          const title = (item.title?.en || item.title || "").toLowerCase()
-          const desc = (item.description?.en || item.description || "").toLowerCase()
+          // Handle both string and object {en: "..."} formats
+          const rawTitle = item.title?.en || (typeof item.title === "string" ? item.title : "")
+          const rawDesc = item.description?.en || (typeof item.description === "string" ? item.description : "")
+          const title = String(rawTitle).toLowerCase()
+          const desc = String(rawDesc).toLowerCase()
           return title.includes("fund") || title.includes("tender") || 
                  title.includes("grant") || title.includes("call") ||
                  desc.includes("funding") || desc.includes("tender")

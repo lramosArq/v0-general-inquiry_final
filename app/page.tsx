@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X, Calendar } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X, Calendar, Bookmark, FolderOpen, Save, RotateCcw, Sparkles } from "lucide-react"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
@@ -66,20 +66,96 @@ export default function GrantsSearchPage() {
   const [sortBy, setSortBy] = useState("posted-desc")
   const [dateRange, setDateRange] = useState("all")
 
-  // Date range filter
+  // Prompt field for natural language search
+  const [promptSearch, setPromptSearch] = useState("")
+
+  // Date range filters (Release Date and Close Date separate)
+  const [releaseDateFilter, setReleaseDateFilter] = useState({
+    startDate: "",
+    endDate: "",
+  })
+  
+  const [closeDateFilter, setCloseDateFilter] = useState({
+    startDate: "",
+    endDate: "",
+  })
+
+  // Legacy date range filter (keeping for compatibility)
   const [dateRangeFilter, setDateRangeFilter] = useState({
     enabled: false,
     startDate: "",
     endDate: "",
-    dateType: "posted" as "posted" | "close", // Filter by posted date or close date
+    dateType: "posted" as "posted" | "close",
   })
 
+  // Region filter (multi-select)
   const [sourceFilter, setSourceFilter] = useState({
     all: true,
     usa: false,
     eu: false,
     spain: false,
+    other: false,
   })
+
+  // ORB/Vent filter (ARQUIMEA business units)
+  const [orbVentFilter, setOrbVentFilter] = useState({
+    all: true,
+    arcOthers: false,
+    bio: false,
+    connect: false,
+    defense: false,
+    molefy: false,
+    nd: false,
+    pulsar: false,
+    space: false,
+    volinga: false,
+    none: false,
+  })
+
+  // Program / TechMap filter
+  const [programFilter, setProgramFilter] = useState({
+    all: true,
+    program1: false,
+    program2: false,
+    program3: false,
+    others: false,
+    none: false,
+  })
+
+  // Type filter
+  const [typeFilter, setTypeFilter] = useState({
+    all: true,
+    grant: false,
+    contract: false,
+    cooperative: false,
+    other: false,
+  })
+
+  // NAICS filter
+  const [naicsFilter, setNaicsFilter] = useState("")
+
+  // Saved searches
+  const [savedSearches, setSavedSearches] = useState<Array<{
+    id: string
+    name: string
+    createdAt: string
+    filters: {
+      keyword: string
+      promptSearch: string
+      sourceFilter: typeof sourceFilter
+      statusFilters: typeof statusFilters
+      orbVentFilter: typeof orbVentFilter
+      programFilter: typeof programFilter
+      typeFilter: typeof typeFilter
+      naicsFilter: string
+      releaseDateFilter: typeof releaseDateFilter
+      closeDateFilter: typeof closeDateFilter
+      categoryFilters: typeof categoryFilters
+    }
+  }>>([])
+  const [showSavedSearches, setShowSavedSearches] = useState(false)
+  const [saveSearchName, setSaveSearchName] = useState("")
+  const [showSaveSearchModal, setShowSaveSearchModal] = useState(false)
 
   const [statusFilters, setStatusFilters] = useState({
     forecasted: true,
@@ -265,7 +341,108 @@ export default function GrantsSearchPage() {
     if (grants.length > 0) {
       applyFilters()
     }
-  }, [grants, keyword, opportunityNumber, sourceFilter, statusFilters, fundingInstruments, categoryFilters, sortBy, dateRangeFilter])
+  }, [grants, keyword, opportunityNumber, promptSearch, sourceFilter, statusFilters, fundingInstruments, categoryFilters, sortBy, dateRangeFilter, releaseDateFilter, closeDateFilter, orbVentFilter, programFilter, typeFilter, naicsFilter])
+
+  // Load saved searches from server on mount
+  useEffect(() => {
+    const loadSavedSearches = async () => {
+      try {
+        const response = await fetch("/api/shared-data?type=savedSearches")
+        const result = await response.json()
+        if (result.success && result.data) {
+          setSavedSearches(result.data)
+        }
+      } catch { /* ignore */ }
+    }
+    loadSavedSearches()
+  }, [])
+
+  // Save current search
+  const handleSaveSearch = async () => {
+    if (!saveSearchName.trim()) return
+    
+    const newSearch = {
+      id: `search_${Date.now()}`,
+      name: saveSearchName.trim(),
+      createdAt: new Date().toISOString(),
+      filters: {
+        keyword,
+        promptSearch,
+        sourceFilter,
+        statusFilters,
+        orbVentFilter,
+        programFilter,
+        typeFilter,
+        naicsFilter,
+        releaseDateFilter,
+        closeDateFilter,
+        categoryFilters,
+      },
+    }
+    
+    const updatedSearches = [...savedSearches, newSearch]
+    setSavedSearches(updatedSearches)
+    
+    // Sync to server
+    try {
+      await fetch("/api/shared-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "savedSearches", action: "save", data: updatedSearches }),
+      })
+    } catch { /* ignore */ }
+    
+    setSaveSearchName("")
+    setShowSaveSearchModal(false)
+  }
+
+  // Load a saved search
+  const handleLoadSearch = (search: typeof savedSearches[0]) => {
+    setKeyword(search.filters.keyword || "")
+    setPromptSearch(search.filters.promptSearch || "")
+    setSourceFilter(search.filters.sourceFilter || { all: true, usa: false, eu: false, spain: false, other: false })
+    setStatusFilters(search.filters.statusFilters || { forecasted: true, open: true, closed: false, archived: false })
+    setOrbVentFilter(search.filters.orbVentFilter || { all: true, arcOthers: false, bio: false, connect: false, defense: false, molefy: false, nd: false, pulsar: false, space: false, volinga: false, none: false })
+    setProgramFilter(search.filters.programFilter || { all: true, program1: false, program2: false, program3: false, others: false, none: false })
+    setTypeFilter(search.filters.typeFilter || { all: true, grant: false, contract: false, cooperative: false, other: false })
+    setNaicsFilter(search.filters.naicsFilter || "")
+    setReleaseDateFilter(search.filters.releaseDateFilter || { startDate: "", endDate: "" })
+    setCloseDateFilter(search.filters.closeDateFilter || { startDate: "", endDate: "" })
+    setCategoryFilters(search.filters.categoryFilters || { all: true, horizonEurope: false, digitalEurope: false, cybersecurity: false, ai: false, space: false, defense: false })
+    setShowSavedSearches(false)
+  }
+
+  // Delete a saved search
+  const handleDeleteSearch = async (searchId: string) => {
+    const updatedSearches = savedSearches.filter((s) => s.id !== searchId)
+    setSavedSearches(updatedSearches)
+    
+    try {
+      await fetch("/api/shared-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "savedSearches", action: "save", data: updatedSearches }),
+      })
+    } catch { /* ignore */ }
+  }
+
+  // Reset all filters
+  const handleResetFilters = () => {
+    setKeyword("")
+    setPromptSearch("")
+    setOpportunityNumber("")
+    setSourceFilter({ all: true, usa: false, eu: false, spain: false, other: false })
+    setStatusFilters({ forecasted: true, open: true, closed: false, archived: false })
+    setOrbVentFilter({ all: true, arcOthers: false, bio: false, connect: false, defense: false, molefy: false, nd: false, pulsar: false, space: false, volinga: false, none: false })
+    setProgramFilter({ all: true, program1: false, program2: false, program3: false, others: false, none: false })
+    setTypeFilter({ all: true, grant: false, contract: false, cooperative: false, other: false })
+    setNaicsFilter("")
+    setReleaseDateFilter({ startDate: "", endDate: "" })
+    setCloseDateFilter({ startDate: "", endDate: "" })
+    setDateRangeFilter({ enabled: false, startDate: "", endDate: "", dateType: "posted" })
+    setCategoryFilters({ all: true, horizonEurope: false, digitalEurope: false, cybersecurity: false, ai: false, space: false, defense: false })
+    setFundingInstruments({ all: true, researchInnovation: false, innovation: false, coordination: false, cascade: false, simpleGrants: false })
+  }
 
   const fetchGrants = async () => {
     setIsLoading(true)
@@ -379,6 +556,15 @@ export default function GrantsSearchPage() {
       }
     }
 
+    // Prompt search (natural language - searches across all text fields)
+    if (promptSearch) {
+      const searchTerms = promptSearch.toLowerCase().split(/\s+/).filter((t) => t.length > 2)
+      filtered = filtered.filter((g) => {
+        const searchableText = `${g.title} ${g.description || ""} ${g.agency} ${g.category || ""}`.toLowerCase()
+        return searchTerms.some((term) => searchableText.includes(term))
+      })
+    }
+
     // Keyword filter
     if (keyword) {
       const lowerKeyword = keyword.toLowerCase()
@@ -448,7 +634,7 @@ export default function GrantsSearchPage() {
       })
     }
 
-    // Date range filter
+    // Date range filter (legacy)
     if (dateRangeFilter.enabled && (dateRangeFilter.startDate || dateRangeFilter.endDate)) {
       filtered = filtered.filter((g) => {
         const dateToCheck = dateRangeFilter.dateType === "posted" ? g.postedDate : g.closeDate
@@ -466,6 +652,44 @@ export default function GrantsSearchPage() {
         } else if (dateRangeFilter.endDate) {
           const endMs = new Date(dateRangeFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
           return grantDate <= endMs
+        }
+        return true
+      })
+    }
+
+    // Release Date filter (new separate filter)
+    if (releaseDateFilter.startDate || releaseDateFilter.endDate) {
+      filtered = filtered.filter((g) => {
+        if (!g.postedDate) return true
+        const grantDate = new Date(g.postedDate).getTime()
+        
+        if (releaseDateFilter.startDate && releaseDateFilter.endDate) {
+          const startMs = new Date(releaseDateFilter.startDate).getTime()
+          const endMs = new Date(releaseDateFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+          return grantDate >= startMs && grantDate <= endMs
+        } else if (releaseDateFilter.startDate) {
+          return grantDate >= new Date(releaseDateFilter.startDate).getTime()
+        } else if (releaseDateFilter.endDate) {
+          return grantDate <= new Date(releaseDateFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+        }
+        return true
+      })
+    }
+
+    // Close Date filter (new separate filter)
+    if (closeDateFilter.startDate || closeDateFilter.endDate) {
+      filtered = filtered.filter((g) => {
+        if (!g.closeDate) return true
+        const grantDate = new Date(g.closeDate).getTime()
+        
+        if (closeDateFilter.startDate && closeDateFilter.endDate) {
+          const startMs = new Date(closeDateFilter.startDate).getTime()
+          const endMs = new Date(closeDateFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+          return grantDate >= startMs && grantDate <= endMs
+        } else if (closeDateFilter.startDate) {
+          return grantDate >= new Date(closeDateFilter.startDate).getTime()
+        } else if (closeDateFilter.endDate) {
+          return grantDate <= new Date(closeDateFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
         }
         return true
       })
@@ -743,17 +967,130 @@ export default function GrantsSearchPage() {
             <div className="lg:col-span-1">
               <Card className="border-[#d1d5db]">
                 <CardContent className="p-4">
-                  <h2 className="font-semibold text-[#1e3a5f] mb-4 text-lg">Filters</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-semibold text-[#1e3a5f] text-lg">Filters</h2>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowSaveSearchModal(true)}
+                        className="h-7 px-2 text-xs"
+                        title="Save Search"
+                      >
+                        <Save className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowSavedSearches(!showSavedSearches)}
+                        className="h-7 px-2 text-xs"
+                        title="Saved Searches"
+                      >
+                        <FolderOpen className="h-3 w-3" />
+                        {savedSearches.length > 0 && (
+                          <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5 text-xs">{savedSearches.length}</span>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleResetFilters}
+                        className="h-7 px-2 text-xs"
+                        title="Reset Filters"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
 
-                  {/* Source Filter */}
+                  {/* Save Search Modal */}
+                  {showSaveSearchModal && (
+                    <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <h4 className="text-sm font-medium text-blue-800 mb-2">Save Current Search</h4>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Search name..."
+                          value={saveSearchName}
+                          onChange={(e) => setSaveSearchName(e.target.value)}
+                          className="text-sm h-8"
+                        />
+                        <Button size="sm" onClick={handleSaveSearch} disabled={!saveSearchName.trim()} className="h-8">
+                          Save
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setShowSaveSearchModal(false)} className="h-8">
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Saved Searches List */}
+                  {showSavedSearches && savedSearches.length > 0 && (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                        <Bookmark className="h-3 w-3" /> Saved Searches
+                      </h4>
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {savedSearches.map((search) => (
+                          <div key={search.id} className="flex items-center justify-between p-2 bg-white rounded border hover:bg-gray-50">
+                            <button
+                              onClick={() => handleLoadSearch(search)}
+                              className="text-sm text-left flex-1 text-blue-600 hover:underline"
+                            >
+                              {search.name}
+                            </button>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-gray-400">{new Date(search.createdAt).toLocaleDateString()}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteSearch(search.id)}
+                                className="h-6 w-6 p-0 text-red-400 hover:text-red-600"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prompt Field */}
                   <div className="mb-6">
-                    <h3 className="font-medium text-sm mb-2 text-gray-700">Source</h3>
+                    <h3 className="font-medium text-sm mb-2 text-gray-700 flex items-center gap-1">
+                      <Sparkles className="h-4 w-4 text-purple-500" />
+                      Prompt
+                    </h3>
+                    <textarea
+                      placeholder="Describe in natural language the type of funding opportunity you want to find..."
+                      value={promptSearch}
+                      onChange={(e) => setPromptSearch(e.target.value)}
+                      className="w-full text-sm p-2 border rounded-md resize-none h-20 focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                    />
+                  </div>
+
+                  {/* Keywords Field */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Keywords</h3>
+                    <Input
+                      placeholder="Enter keywords..."
+                      value={keyword}
+                      onChange={(e) => setKeyword(e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  {/* Region Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Region</h3>
                     <div className="space-y-2">
                       {[
-                        { key: "all", label: "All Sources", icon: Globe },
-                        { key: "usa", label: "USA (Grants.gov)", icon: Flag },
-                        { key: "eu", label: "EU (Funding & Tenders)", icon: Globe },
+                        { key: "all", label: "All Regions", icon: Globe },
+                        { key: "usa", label: "US (Grants.gov)", icon: Flag },
+                        { key: "eu", label: "Europe (Funding & Tenders)", icon: Globe },
                         { key: "spain", label: "Spain (Subvenciones)", icon: Flag },
+                        { key: "other", label: "Other", icon: Globe },
                       ].map(({ key, label, icon: Icon }) => (
                         <div key={key} className="flex items-center space-x-2">
                           <Checkbox
@@ -815,168 +1152,87 @@ export default function GrantsSearchPage() {
                     </div>
                   </div>
 
-                  {/* Date Range Filter */}
+                  {/* Release Date Filter */}
                   <div className="mb-6">
                     <h3 className="font-medium text-sm mb-2 text-gray-700 flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
-                      Date Range
+                      Release Date
                     </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="date-range-enabled"
-                          checked={dateRangeFilter.enabled}
-                          onCheckedChange={(checked) =>
-                            setDateRangeFilter((prev) => ({ ...prev, enabled: !!checked }))
-                          }
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="release-start-date" className="text-xs text-gray-500">From:</Label>
+                        <Input
+                          type="date"
+                          id="release-start-date"
+                          value={releaseDateFilter.startDate}
+                          onChange={(e) => setReleaseDateFilter((prev) => ({ ...prev, startDate: e.target.value }))}
+                          className="text-sm h-8"
                         />
-                        <Label htmlFor="date-range-enabled" className="text-sm cursor-pointer">
-                          Enable date filter
-                        </Label>
                       </div>
-                      
-                      {dateRangeFilter.enabled && (
-                        <>
-                          <div className="space-y-1">
-                            <Label className="text-xs text-gray-500">Filter by:</Label>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant={dateRangeFilter.dateType === "posted" ? "default" : "outline"}
-                                onClick={() => setDateRangeFilter((prev) => ({ ...prev, dateType: "posted" }))}
-                                className="text-xs h-7 flex-1"
-                              >
-                                Posted Date
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={dateRangeFilter.dateType === "close" ? "default" : "outline"}
-                                onClick={() => setDateRangeFilter((prev) => ({ ...prev, dateType: "close" }))}
-                                className="text-xs h-7 flex-1"
-                              >
-                                Close Date
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-1">
-                            <Label htmlFor="start-date" className="text-xs text-gray-500">From:</Label>
-                            <Input
-                              type="date"
-                              id="start-date"
-                              value={dateRangeFilter.startDate}
-                              onChange={(e) => setDateRangeFilter((prev) => ({ ...prev, startDate: e.target.value }))}
-                              className="text-sm h-8"
-                            />
-                          </div>
-                          
-                          <div className="space-y-1">
-                            <Label htmlFor="end-date" className="text-xs text-gray-500">To:</Label>
-                            <Input
-                              type="date"
-                              id="end-date"
-                              value={dateRangeFilter.endDate}
-                              onChange={(e) => setDateRangeFilter((prev) => ({ ...prev, endDate: e.target.value }))}
-                              className="text-sm h-8"
-                            />
-                          </div>
-                          
-                          {/* Quick Date Presets */}
-                          <div className="space-y-1">
-                            <Label className="text-xs text-gray-500">Quick select:</Label>
-                            <div className="grid grid-cols-2 gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  const today = new Date()
-                                  const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate())
-                                  setDateRangeFilter((prev) => ({
-                                    ...prev,
-                                    startDate: lastMonth.toISOString().split("T")[0],
-                                    endDate: today.toISOString().split("T")[0],
-                                  }))
-                                }}
-                                className="text-xs h-6"
-                              >
-                                Last month
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  const today = new Date()
-                                  const last3Months = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate())
-                                  setDateRangeFilter((prev) => ({
-                                    ...prev,
-                                    startDate: last3Months.toISOString().split("T")[0],
-                                    endDate: today.toISOString().split("T")[0],
-                                  }))
-                                }}
-                                className="text-xs h-6"
-                              >
-                                Last 3 months
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  const today = new Date()
-                                  const last6Months = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate())
-                                  setDateRangeFilter((prev) => ({
-                                    ...prev,
-                                    startDate: last6Months.toISOString().split("T")[0],
-                                    endDate: today.toISOString().split("T")[0],
-                                  }))
-                                }}
-                                className="text-xs h-6"
-                              >
-                                Last 6 months
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  const today = new Date()
-                                  const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
-                                  setDateRangeFilter((prev) => ({
-                                    ...prev,
-                                    startDate: lastYear.toISOString().split("T")[0],
-                                    endDate: today.toISOString().split("T")[0],
-                                  }))
-                                }}
-                                className="text-xs h-6"
-                              >
-                                Last year
-                              </Button>
-                            </div>
-                          </div>
-
-                          {(dateRangeFilter.startDate || dateRangeFilter.endDate) && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setDateRangeFilter((prev) => ({ ...prev, startDate: "", endDate: "" }))}
-                              className="text-xs h-7 w-full text-gray-500 hover:text-gray-700"
-                            >
-                              Clear dates
-                            </Button>
-                          )}
-                          
-                          {dateRangeFilter.startDate && dateRangeFilter.endDate && (
-                            <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                              Showing opportunities with {dateRangeFilter.dateType === "posted" ? "posted" : "close"} date between{" "}
-                              {new Date(dateRangeFilter.startDate).toLocaleDateString()} and{" "}
-                              {new Date(dateRangeFilter.endDate).toLocaleDateString()}
-                            </div>
-                          )}
-                          
-                          {/* Hint about closed opportunities */}
-                          <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                            Enable &quot;Closed&quot; status filter to see past opportunities
-                          </div>
-                        </>
+                      <div className="space-y-1">
+                        <Label htmlFor="release-end-date" className="text-xs text-gray-500">To:</Label>
+                        <Input
+                          type="date"
+                          id="release-end-date"
+                          value={releaseDateFilter.endDate}
+                          onChange={(e) => setReleaseDateFilter((prev) => ({ ...prev, endDate: e.target.value }))}
+                          className="text-sm h-8"
+                        />
+                      </div>
+                      {(releaseDateFilter.startDate || releaseDateFilter.endDate) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setReleaseDateFilter({ startDate: "", endDate: "" })}
+                          className="text-xs h-6 w-full text-gray-500"
+                        >
+                          Clear
+                        </Button>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Close Date Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700 flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      Close Date
+                    </h3>
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="close-start-date" className="text-xs text-gray-500">From:</Label>
+                        <Input
+                          type="date"
+                          id="close-start-date"
+                          value={closeDateFilter.startDate}
+                          onChange={(e) => setCloseDateFilter((prev) => ({ ...prev, startDate: e.target.value }))}
+                          className="text-sm h-8"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="close-end-date" className="text-xs text-gray-500">To:</Label>
+                        <Input
+                          type="date"
+                          id="close-end-date"
+                          value={closeDateFilter.endDate}
+                          onChange={(e) => setCloseDateFilter((prev) => ({ ...prev, endDate: e.target.value }))}
+                          className="text-sm h-8"
+                        />
+                      </div>
+                      {(closeDateFilter.startDate || closeDateFilter.endDate) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setCloseDateFilter({ startDate: "", endDate: "" })}
+                          className="text-xs h-6 w-full text-gray-500"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                      {/* Hint about closed opportunities */}
+                      <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded mt-2">
+                        Enable &quot;Closed&quot; status filter to see past opportunities
+                      </div>
                     </div>
                   </div>
 
@@ -1033,6 +1289,139 @@ export default function GrantsSearchPage() {
                     </div>
                   </div>
 
+                  {/* ORB/Vent Filter (ARQUIMEA Business Units) */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">ORB/Vent</h3>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {[
+                        { key: "all", label: "All" },
+                        { key: "arcOthers", label: "ARC-OTHERS" },
+                        { key: "bio", label: "BIO" },
+                        { key: "connect", label: "CONNECT" },
+                        { key: "defense", label: "DEFENSE" },
+                        { key: "molefy", label: "MOLEFY" },
+                        { key: "nd", label: "ND" },
+                        { key: "pulsar", label: "PULSAR" },
+                        { key: "space", label: "SPACE" },
+                        { key: "volinga", label: "VOLINGA" },
+                        { key: "none", label: "None" },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`orb-${key}`}
+                            checked={orbVentFilter[key as keyof typeof orbVentFilter]}
+                            onCheckedChange={(checked) => {
+                              if (key === "all") {
+                                setOrbVentFilter({
+                                  all: true,
+                                  arcOthers: false, bio: false, connect: false, defense: false,
+                                  molefy: false, nd: false, pulsar: false, space: false, volinga: false, none: false,
+                                })
+                              } else {
+                                setOrbVentFilter((prev) => ({
+                                  ...prev,
+                                  all: false,
+                                  [key]: !!checked,
+                                }))
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`orb-${key}`} className="text-sm cursor-pointer">
+                            {label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Program / TechMap Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Program / TechMap</h3>
+                    <div className="space-y-2">
+                      {[
+                        { key: "all", label: "All" },
+                        { key: "program1", label: "Program 1" },
+                        { key: "program2", label: "Program 2" },
+                        { key: "program3", label: "Program 3" },
+                        { key: "others", label: "Others" },
+                        { key: "none", label: "None" },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`program-${key}`}
+                            checked={programFilter[key as keyof typeof programFilter]}
+                            onCheckedChange={(checked) => {
+                              if (key === "all") {
+                                setProgramFilter({
+                                  all: true,
+                                  program1: false, program2: false, program3: false, others: false, none: false,
+                                })
+                              } else {
+                                setProgramFilter((prev) => ({
+                                  ...prev,
+                                  all: false,
+                                  [key]: !!checked,
+                                }))
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`program-${key}`} className="text-sm cursor-pointer">
+                            {label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Type Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">Type</h3>
+                    <div className="space-y-2">
+                      {[
+                        { key: "all", label: "All Types" },
+                        { key: "grant", label: "Grant" },
+                        { key: "contract", label: "Contract" },
+                        { key: "cooperative", label: "Cooperative Agreement" },
+                        { key: "other", label: "Other" },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`type-${key}`}
+                            checked={typeFilter[key as keyof typeof typeFilter]}
+                            onCheckedChange={(checked) => {
+                              if (key === "all") {
+                                setTypeFilter({
+                                  all: true,
+                                  grant: false, contract: false, cooperative: false, other: false,
+                                })
+                              } else {
+                                setTypeFilter((prev) => ({
+                                  ...prev,
+                                  all: false,
+                                  [key]: !!checked,
+                                }))
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`type-${key}`} className="text-sm cursor-pointer">
+                            {label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* NAICS Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700">NAICS Code</h3>
+                    <Input
+                      placeholder="Enter NAICS code..."
+                      value={naicsFilter}
+                      onChange={(e) => setNaicsFilter(e.target.value)}
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Optional: filter by industry code</p>
+                  </div>
 
                 </CardContent>
               </Card>

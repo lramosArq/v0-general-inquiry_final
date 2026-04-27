@@ -39,12 +39,14 @@ let sharedData: {
     topKeywords: Record<string, number>
     lastTrainingUpdate: string
   }
+  savedSearches: any[]
   lastUpdated: string
 } = {
   opportunityClaims: [],
   userAlerts: {},
   userSettings: {},
   feedbackData: {},
+  savedSearches: [],
   trainingFeedback: [],
   trainingStats: {
     totalFeedbacks: 0,
@@ -102,6 +104,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: sharedData.feedbackData,
+        lastUpdated: sharedData.lastUpdated,
+      })
+    }
+
+    if (dataType === "savedSearches") {
+      return NextResponse.json({
+        success: true,
+        data: sharedData.savedSearches,
         lastUpdated: sharedData.lastUpdated,
       })
     }
@@ -205,6 +215,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: sharedData.userSettings[userId],
+        lastUpdated: sharedData.lastUpdated,
+      })
+    }
+
+    // Handle saved searches (shared across teams)
+    if (type === "savedSearches") {
+      if (action === "save") {
+        sharedData.savedSearches = data
+      }
+      
+      return NextResponse.json({
+        success: true,
+        data: sharedData.savedSearches,
         lastUpdated: sharedData.lastUpdated,
       })
     }

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X, Calendar } from "lucide-react"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
@@ -65,6 +65,14 @@ export default function GrantsSearchPage() {
   const [assistanceListings, setAssistanceListings] = useState("")
   const [sortBy, setSortBy] = useState("posted-desc")
   const [dateRange, setDateRange] = useState("all")
+
+  // Date range filter
+  const [dateRangeFilter, setDateRangeFilter] = useState({
+    enabled: false,
+    startDate: "",
+    endDate: "",
+    dateType: "posted" as "posted" | "close", // Filter by posted date or close date
+  })
 
   const [sourceFilter, setSourceFilter] = useState({
     all: true,
@@ -257,7 +265,7 @@ export default function GrantsSearchPage() {
     if (grants.length > 0) {
       applyFilters()
     }
-  }, [grants, keyword, opportunityNumber, sourceFilter, statusFilters, fundingInstruments, categoryFilters, sortBy])
+  }, [grants, keyword, opportunityNumber, sourceFilter, statusFilters, fundingInstruments, categoryFilters, sortBy, dateRangeFilter])
 
   const fetchGrants = async () => {
     setIsLoading(true)
@@ -437,6 +445,29 @@ export default function GrantsSearchPage() {
           return true
 
         return false
+      })
+    }
+
+    // Date range filter
+    if (dateRangeFilter.enabled && (dateRangeFilter.startDate || dateRangeFilter.endDate)) {
+      filtered = filtered.filter((g) => {
+        const dateToCheck = dateRangeFilter.dateType === "posted" ? g.postedDate : g.closeDate
+        if (!dateToCheck) return true // Keep grants without dates
+        
+        const grantDate = new Date(dateToCheck).getTime()
+        
+        if (dateRangeFilter.startDate && dateRangeFilter.endDate) {
+          const startMs = new Date(dateRangeFilter.startDate).getTime()
+          const endMs = new Date(dateRangeFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1) // End of day
+          return grantDate >= startMs && grantDate <= endMs
+        } else if (dateRangeFilter.startDate) {
+          const startMs = new Date(dateRangeFilter.startDate).getTime()
+          return grantDate >= startMs
+        } else if (dateRangeFilter.endDate) {
+          const endMs = new Date(dateRangeFilter.endDate).getTime() + (24 * 60 * 60 * 1000 - 1)
+          return grantDate <= endMs
+        }
+        return true
       })
     }
 
@@ -781,6 +812,171 @@ export default function GrantsSearchPage() {
                           </Label>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Date Range Filter */}
+                  <div className="mb-6">
+                    <h3 className="font-medium text-sm mb-2 text-gray-700 flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      Date Range
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="date-range-enabled"
+                          checked={dateRangeFilter.enabled}
+                          onCheckedChange={(checked) =>
+                            setDateRangeFilter((prev) => ({ ...prev, enabled: !!checked }))
+                          }
+                        />
+                        <Label htmlFor="date-range-enabled" className="text-sm cursor-pointer">
+                          Enable date filter
+                        </Label>
+                      </div>
+                      
+                      {dateRangeFilter.enabled && (
+                        <>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-gray-500">Filter by:</Label>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant={dateRangeFilter.dateType === "posted" ? "default" : "outline"}
+                                onClick={() => setDateRangeFilter((prev) => ({ ...prev, dateType: "posted" }))}
+                                className="text-xs h-7 flex-1"
+                              >
+                                Posted Date
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={dateRangeFilter.dateType === "close" ? "default" : "outline"}
+                                onClick={() => setDateRangeFilter((prev) => ({ ...prev, dateType: "close" }))}
+                                className="text-xs h-7 flex-1"
+                              >
+                                Close Date
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <Label htmlFor="start-date" className="text-xs text-gray-500">From:</Label>
+                            <Input
+                              type="date"
+                              id="start-date"
+                              value={dateRangeFilter.startDate}
+                              onChange={(e) => setDateRangeFilter((prev) => ({ ...prev, startDate: e.target.value }))}
+                              className="text-sm h-8"
+                            />
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <Label htmlFor="end-date" className="text-xs text-gray-500">To:</Label>
+                            <Input
+                              type="date"
+                              id="end-date"
+                              value={dateRangeFilter.endDate}
+                              onChange={(e) => setDateRangeFilter((prev) => ({ ...prev, endDate: e.target.value }))}
+                              className="text-sm h-8"
+                            />
+                          </div>
+                          
+                          {/* Quick Date Presets */}
+                          <div className="space-y-1">
+                            <Label className="text-xs text-gray-500">Quick select:</Label>
+                            <div className="grid grid-cols-2 gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const today = new Date()
+                                  const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate())
+                                  setDateRangeFilter((prev) => ({
+                                    ...prev,
+                                    startDate: lastMonth.toISOString().split("T")[0],
+                                    endDate: today.toISOString().split("T")[0],
+                                  }))
+                                }}
+                                className="text-xs h-6"
+                              >
+                                Last month
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const today = new Date()
+                                  const last3Months = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate())
+                                  setDateRangeFilter((prev) => ({
+                                    ...prev,
+                                    startDate: last3Months.toISOString().split("T")[0],
+                                    endDate: today.toISOString().split("T")[0],
+                                  }))
+                                }}
+                                className="text-xs h-6"
+                              >
+                                Last 3 months
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const today = new Date()
+                                  const last6Months = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate())
+                                  setDateRangeFilter((prev) => ({
+                                    ...prev,
+                                    startDate: last6Months.toISOString().split("T")[0],
+                                    endDate: today.toISOString().split("T")[0],
+                                  }))
+                                }}
+                                className="text-xs h-6"
+                              >
+                                Last 6 months
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const today = new Date()
+                                  const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
+                                  setDateRangeFilter((prev) => ({
+                                    ...prev,
+                                    startDate: lastYear.toISOString().split("T")[0],
+                                    endDate: today.toISOString().split("T")[0],
+                                  }))
+                                }}
+                                className="text-xs h-6"
+                              >
+                                Last year
+                              </Button>
+                            </div>
+                          </div>
+
+                          {(dateRangeFilter.startDate || dateRangeFilter.endDate) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setDateRangeFilter((prev) => ({ ...prev, startDate: "", endDate: "" }))}
+                              className="text-xs h-7 w-full text-gray-500 hover:text-gray-700"
+                            >
+                              Clear dates
+                            </Button>
+                          )}
+                          
+                          {dateRangeFilter.startDate && dateRangeFilter.endDate && (
+                            <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                              Showing opportunities with {dateRangeFilter.dateType === "posted" ? "posted" : "close"} date between{" "}
+                              {new Date(dateRangeFilter.startDate).toLocaleDateString()} and{" "}
+                              {new Date(dateRangeFilter.endDate).toLocaleDateString()}
+                            </div>
+                          )}
+                          
+                          {/* Hint about closed opportunities */}
+                          <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                            Enable &quot;Closed&quot; status filter to see past opportunities
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 

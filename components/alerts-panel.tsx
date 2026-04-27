@@ -170,10 +170,10 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       const result = await response.json()
 
       if (result.success) {
-        setMessage({ 
-          type: "success", 
-          text: `Test email sent to ${targetEmail}!` 
-        })
+        const successMsg = result.demoMode 
+          ? `Email de prueba enviado a ${targetEmail} (modo demo)`
+          : `Email de prueba enviado a ${targetEmail}!`
+        setMessage({ type: "success", text: successMsg })
       } else {
         setMessage({ type: "error", text: result.error || result.message || "Failed to send test email" })
       }
@@ -289,7 +289,11 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       const result = await response.json()
 
       if (result.success) {
-        setMessage({ type: "success", text: `Alert sent to ${targetEmail}!` })
+        // Show appropriate message based on demo mode
+        const successMsg = result.demoMode 
+          ? `Alerta enviada a ${targetEmail} (modo demo - email simulado)`
+          : `Alerta enviada a ${targetEmail}!`
+        setMessage({ type: "success", text: successMsg })
 
         // Update last triggered
         await userService.updateAlert(user.id, alert.id, { lastTriggered: new Date().toISOString() })
@@ -299,19 +303,7 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
         }
       } else {
         console.error("[v0] Send alert error:", result)
-        // Show detailed error message with special handling for test mode restriction
         let errorMsg = result.error || "Failed to send alert"
-        
-        if (result.testModeRestriction) {
-          errorMsg = `Modo de prueba: Solo se puede enviar a ${result.allowedEmail || "lramos@arquimea.com"}. Para enviar a otros destinatarios, configure un dominio verificado en Resend.`
-        } else {
-          if (result.details) {
-            errorMsg += ` (${result.details})`
-          }
-          if (result.suggestion) {
-            errorMsg += `. ${result.suggestion}`
-          }
-        }
         setMessage({ type: "error", text: errorMsg })
       }
     } catch (error) {

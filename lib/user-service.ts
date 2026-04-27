@@ -232,6 +232,17 @@ export class UserService {
 
     if (predefinedUser) {
       const userWithLogin = { ...predefinedUser, lastLogin: new Date().toISOString() }
+      
+      // Cargar alertas desde el servidor
+      try {
+        const serverAlerts = await sharedDataService.fetchAlerts(predefinedUser.id)
+        if (serverAlerts && serverAlerts.length > 0) {
+          userWithLogin.alerts = serverAlerts
+        }
+      } catch (e) {
+        console.log("[v0] Could not load alerts from server")
+      }
+      
       if (typeof window !== "undefined") {
         localStorage.setItem(this.currentUserKey, JSON.stringify(userWithLogin))
       }
@@ -248,6 +259,17 @@ export class UserService {
 
     // Update last login
     user.lastLogin = new Date().toISOString()
+    
+    // Cargar alertas desde el servidor
+    try {
+      const serverAlerts = await sharedDataService.fetchAlerts(user.id)
+      if (serverAlerts && serverAlerts.length > 0) {
+        user.alerts = serverAlerts
+      }
+    } catch (e) {
+      console.log("[v0] Could not load alerts from server")
+    }
+    
     this.saveUsers(users)
 
     // Store current user

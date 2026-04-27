@@ -115,12 +115,28 @@ export default function GrantsSearchPage() {
   })
 
   useEffect(() => {
-    const userService = UserService.getInstance()
-    const user = userService.getCurrentUser()
-    if (user) {
-      setCurrentUser({ ...user, alerts: user.alerts || [] })
+    const initializeUser = async () => {
+      const userService = UserService.getInstance()
+      const user = userService.getCurrentUser()
+      if (user) {
+        // Load alerts from server for this user
+        try {
+          const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
+          const result = await response.json()
+          if (result.success && result.data && result.data.length > 0) {
+            user.alerts = result.data
+            // Update localStorage with server data
+            localStorage.setItem("arquimea_current_user", JSON.stringify(user))
+          }
+        } catch (e) {
+          console.log("[v0] Could not load alerts from server, using local data")
+        }
+        setCurrentUser({ ...user, alerts: user.alerts || [] })
+      }
+      setIsCheckingAuth(false)
     }
-    setIsCheckingAuth(false)
+    
+    initializeUser()
 
     // Load interest feedback from server first, then localStorage as fallback
     const loadFeedback = async () => {
@@ -168,7 +184,34 @@ export default function GrantsSearchPage() {
       const pollInterval = setInterval(async () => {
         const freshClaims = await claimService.refreshClaims()
         setOpportunityClaims(freshClaims)
-      }, 3000)
+        
+        // Also refresh user alerts from server
+        const userService = UserService.getInstance()
+        const currentUserData = userService.getCurrentUser()
+        if (currentUserData) {
+          try {
+            const response = await fetch(`/api/shared-data?type=alerts&userId=${currentUserData.id}`)
+            const result = await response.json()
+            if (result.success && result.data) {
+              const updatedUser = { ...currentUserData, alerts: result.data }
+              localStorage.setItem("arquimea_current_user", JSON.stringify(updatedUser))
+              setCurrentUser(updatedUser)
+            }
+          } catch { /* ignore */ }
+        }
+        
+        // Refresh feedback from server
+        try {
+          const feedbackResponse = await fetch("/api/shared-data?type=feedback")
+          const feedbackResult = await feedbackResponse.json()
+          if (feedbackResult.success && Object.keys(feedbackResult.data).length > 0) {
+            setInterestFeedback(feedbackResult.data)
+            const interested = Object.values(feedbackResult.data).filter((v) => v === "interested").length
+            const notInterested = Object.values(feedbackResult.data).filter((v) => v === "not_interested").length
+            setFeedbackStats({ interested, notInterested })
+          }
+        } catch { /* ignore */ }
+      }, 5000)
       
       return () => clearInterval(pollInterval)
     }

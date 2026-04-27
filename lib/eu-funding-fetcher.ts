@@ -1,3 +1,29 @@
+// ARQUIMEA tech map keywords for EU filtering
+const ARQUIMEA_EU_KEYWORDS = [
+  // UAS/UAV/Drones
+  "UAS", "UAV", "drone", "unmanned", "RPAS", "counter-UAS",
+  // Space & Satellite
+  "space", "satellite", "Copernicus", "Galileo", "ESA", "orbit", "launcher",
+  // Defense
+  "defence", "defense", "EDF", "EDIRPA", "ASAP", "military", "dual-use",
+  // Sensors & ISR
+  "sensor", "radar", "lidar", "surveillance", "ISR", "optical", "infrared",
+  // Quantum & Photonics
+  "quantum", "photonic", "PIC", "gyroscope", "inertial",
+  // Naval & Maritime
+  "maritime", "naval", "USV", "UUV", "autonomous vessel",
+  // Communications
+  "secure communication", "SATCOM", "5G", "6G",
+  // Robotics
+  "robotic", "autonomous system", "actuator",
+  // Aerospace
+  "aerospace", "propulsion", "aircraft",
+  // Biosensors
+  "biosensor", "health monitoring",
+  // Programs
+  "Horizon Europe", "Digital Europe", "EDIDP",
+]
+
 export interface EUGrant {
   id: string
   title: string
@@ -14,33 +40,55 @@ export interface EUGrant {
 }
 
 export class EUFundingFetcher {
-  async fetchAllGrants(keyword?: string): Promise<EUGrant[]> {
-    console.log("[v0] EU - Fetching grants from data.europa.eu API...")
-
-    try {
-      // Try data.europa.eu Search API for funding/tenders datasets
-      const grants = await this.fetchFromDataEuropaAPI(keyword)
-      
-      if (grants.length === 0) {
-        // Fallback to TED (Tenders Electronic Daily)
-        console.log("[v0] EU - Trying TED API...")
-        const tedGrants = await this.fetchFromTEDAPI(keyword)
-        console.log(`[v0] EU - Total grants from TED: ${tedGrants.length}`)
-        return tedGrants
-      }
-      
-      console.log(`[v0] EU - Total grants from API: ${grants.length}`)
-      return grants
-    } catch (error) {
-      console.error("[v0] EU - Error fetching from API:", error)
-      return []
-    }
+  // Check if opportunity matches ARQUIMEA tech map
+  private matchesArquimeaTechMap(title: string, description: string): boolean {
+    const text = `${title} ${description}`.toLowerCase()
+    return ARQUIMEA_EU_KEYWORDS.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()))
   }
 
-  private async fetchFromDataEuropaAPI(keyword?: string): Promise<EUGrant[]> {
-    const searchQuery = keyword && keyword !== "all" && keyword !== "*" 
-      ? keyword 
-      : "funding tenders"
+  async fetchAllGrants(keyword?: string): Promise<EUGrant[]> {
+    console.log("[v0] EU - Fetching grants (ARQUIMEA tech map)...")
+
+    const allGrants: EUGrant[] = []
+
+    // Search with multiple ARQUIMEA-relevant terms
+    const searchTerms = ["defence space", "UAV drone", "quantum sensor", "satellite"]
+    
+    for (const term of searchTerms) {
+      try {
+        const grants = await this.fetchFromDataEuropaAPI(term)
+        const relevant = grants.filter(g => 
+          this.matchesArquimeaTechMap(g.title, g.description)
+        )
+        allGrants.push(...relevant)
+        console.log(`[v0] EU - data.europa "${term}": ${relevant.length} relevant`)
+      } catch (error) {
+        console.error(`[v0] EU - data.europa "${term}" error:`, error)
+      }
+    }
+
+    // Also try TED for procurement
+    try {
+      const tedGrants = await this.fetchFromTEDAPI("defence")
+      const relevantTed = tedGrants.filter(g => 
+        this.matchesArquimeaTechMap(g.title, g.description)
+      )
+      allGrants.push(...relevantTed)
+      console.log(`[v0] EU - TED defence: ${relevantTed.length} relevant`)
+    } catch (error) {
+      console.error("[v0] EU - TED error:", error)
+    }
+
+    // Remove duplicates by ID
+    const uniqueGrants = allGrants.filter((grant, index, self) =>
+      index === self.findIndex(g => g.id === grant.id)
+    )
+
+    console.log(`[v0] EU - Total ARQUIMEA-relevant grants: ${uniqueGrants.length}`)
+    return uniqueGrants
+  }
+
+  private async fetchFromDataEuropaAPI(searchQuery: string): Promise<EUGrant[]> {
     
     try {
       // data.europa.eu Search API

@@ -37,9 +37,11 @@ export class EUFundingFetcher {
     return filteredGrants
   }
 
-private generateEUUrl(id: string): string {
-  // Direct link to topic details page on EU Funding & Tenders Portal
-  return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${id.toLowerCase()}`
+private generateEUUrl(id: string, title?: string): string {
+  // Use search by keyword which is more reliable for demo data
+  // The search will find the actual topic if it exists
+  const searchTerm = title ? title.substring(0, 60) : id
+  return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search?keywords=${encodeURIComponent(searchTerm)}`
   }
 
   private getVerifiedEUGrants(): EUGrant[] {
@@ -172,7 +174,7 @@ private generateEUUrl(id: string): string {
     ]
 
     return euOpportunities.map((opp) => {
-      const url = this.generateEUUrl(opp.id)
+      const url = this.generateEUUrl(opp.id, opp.title)
       return {
         id: opp.id,
         title: opp.title,

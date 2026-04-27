@@ -56,8 +56,9 @@ function generateDirectUrl(grant: any, source: "usa" | "eu" | "spain"): string {
       return `https://www.grants.gov/search?keywords=${encodeURIComponent(title.substring(0, 50))}`
       
     case "eu":
-      // EU Funding & Tenders Portal - direct link to topic details
-      return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${id.toLowerCase()}`
+      // EU Funding & Tenders Portal - search by title for reliable results
+      const searchTerm = title ? title.substring(0, 60) : id
+      return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search?keywords=${encodeURIComponent(searchTerm)}`
       
     case "spain":
       // Spain - generate search URL based on portal

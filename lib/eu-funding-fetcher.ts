@@ -84,7 +84,9 @@ export class EUFundingFetcher {
       return await this.fetchFromAlternativeAPI(searchKeyword)
     }
 
-    return data.results.map((item: any) => this.mapEUResult(item)).filter(Boolean)
+    return data.results
+      .map((item: any, index: number) => this.mapEUResult(item, index))
+      .filter((item): item is EUGrant => item !== null && item.title !== "Untitled")
   }
 
   private async fetchFromAlternativeAPI(keyword?: string): Promise<EUGrant[]> {
@@ -117,6 +119,10 @@ export class EUFundingFetcher {
       if (Array.isArray(data)) {
         return data
           .filter((item: any) => {
+            // Only include items with valid identifier and title
+            if (!item.identifier && !item.topicId) return false
+            if (!item.title || item.title === "Untitled") return false
+            
             if (!keyword || keyword === "all" || keyword === "*") return true
             const searchLower = keyword.toLowerCase()
             return (
@@ -125,8 +131,8 @@ export class EUFundingFetcher {
             )
           })
           .slice(0, 50)
-          .map((item: any) => this.mapEUResult(item))
-          .filter(Boolean)
+          .map((item: any, index: number) => this.mapEUResult(item, index))
+          .filter((item): item is EUGrant => item !== null)
       }
       
       return []
@@ -136,11 +142,15 @@ export class EUFundingFetcher {
     }
   }
 
-  private mapEUResult(item: any): EUGrant | null {
+  private mapEUResult(item: any, index: number): EUGrant | null {
     if (!item) return null
 
-    const id = item.identifier || item.topicId || item.ccm2Id || `EU-${Date.now()}`
-    const title = item.title || item.name || "Untitled"
+    // Require a valid identifier - don't generate fake IDs
+    const id = item.identifier || item.topicId || item.ccm2Id
+    if (!id) return null
+    
+    const title = item.title || item.name
+    if (!title || title === "Untitled") return null
     
     // Generate direct URL to the topic
     const url = `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${id.toLowerCase()}`

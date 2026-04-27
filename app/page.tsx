@@ -18,6 +18,7 @@ import { GPTSyncPanel } from "@/components/gpt-sync-panel"
 import { LoginScreen } from "@/components/login-screen"
 import { UserService, type User as UserType } from "@/lib/user-service"
 import { OpportunityClaimService, type OpportunityClaim } from "@/lib/opportunity-claim-service"
+import { TrainingStatsPanel } from "@/components/training-stats-panel"
 
 interface Grant {
   id: string
@@ -56,6 +57,7 @@ export default function GrantsSearchPage() {
   // Opportunity claims
   const [opportunityClaims, setOpportunityClaims] = useState<OpportunityClaim[]>([])
   const [showMyClaimsPanel, setShowMyClaimsPanel] = useState(false)
+  const [showTrainingStats, setShowTrainingStats] = useState(false)
 
   // Search filters
   const [keyword, setKeyword] = useState("")
@@ -230,6 +232,7 @@ export default function GrantsSearchPage() {
 
   const handleInterestFeedback = (grantId: string, interest: "interested" | "not_interested") => {
     const newFeedback = { ...interestFeedback }
+    const grant = grants.find((g) => g.id === grantId)
     
     // Toggle: if same value clicked again, remove feedback
     if (newFeedback[grantId] === interest) {
@@ -248,12 +251,38 @@ export default function GrantsSearchPage() {
     // Persist to localStorage and sync to server
     try {
       localStorage.setItem("grantInterestFeedback", JSON.stringify(newFeedback))
-      // Sync to shared server for other users
+      
+      // Sync simple feedback format for other users
       fetch("/api/shared-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "feedback", action: "update", data: newFeedback }),
       }).catch(() => {})
+      
+      // Send detailed training data for AI learning
+      if (currentUser && grant && newFeedback[grantId]) {
+        fetch("/api/shared-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "training",
+            data: {
+              opportunityId: grantId,
+              userId: currentUser.id,
+              userName: currentUser.name,
+              businessUnit: currentUser.businessUnit,
+              feedback: interest,
+              opportunityData: {
+                title: grant.title,
+                agency: grant.agency,
+                category: grant.category,
+                source: grant.source,
+                keywords: grant.title.toLowerCase().split(/\s+/).filter((w: string) => w.length > 4),
+              },
+            },
+          }),
+        }).catch(() => {})
+      }
     } catch { /* ignore */ }
   }
 
@@ -773,17 +802,22 @@ export default function GrantsSearchPage() {
                         <h2 className="font-semibold text-[#1e3a5f]">
                           {isLoading ? "Loading..." : `${filteredGrants.length} Opportunities Found`}
                         </h2>
-                        {(feedbackStats.interested > 0 || feedbackStats.notInterested > 0) && (
-                          <div className="flex items-center gap-2 text-xs">
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                              <ThumbsUp className="h-3 w-3 mr-1" /> {feedbackStats.interested} Interested
-                            </Badge>
-                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                              <ThumbsDown className="h-3 w-3 mr-1" /> {feedbackStats.notInterested} Not Interested
-                            </Badge>
-                            <span className="text-gray-500">Training memory</span>
-                          </div>
-                        )}
+                {(feedbackStats.interested > 0 || feedbackStats.notInterested > 0) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowTrainingStats(true)}
+                    className="flex items-center gap-2 text-xs h-7 bg-purple-50 border-purple-200 hover:bg-purple-100"
+                  >
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 py-0">
+                      <ThumbsUp className="h-3 w-3 mr-1" /> {feedbackStats.interested}
+                    </Badge>
+                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 py-0">
+                      <ThumbsDown className="h-3 w-3 mr-1" /> {feedbackStats.notInterested}
+                    </Badge>
+                    <span className="text-purple-700 font-medium">Training Memory</span>
+                  </Button>
+                )}
                       </div>
                       <select
                         className="text-sm border rounded px-2 py-1"
@@ -998,6 +1032,9 @@ export default function GrantsSearchPage() {
           </div>
         )}
       </div>
+
+      {/* Training Stats Panel */}
+      <TrainingStatsPanel isOpen={showTrainingStats} onClose={() => setShowTrainingStats(false)} />
 
       {/* My Claims Panel */}
       {showMyClaimsPanel && (

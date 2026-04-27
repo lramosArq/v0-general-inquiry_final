@@ -1,27 +1,20 @@
+/**
+ * EU Funding Fetcher
+ * Uses EU Funding & Tenders Portal search and verified fallback data
+ * Filtered for ARQUIMEA tech map: defence, space, sensors, quantum, etc.
+ */
+
 // ARQUIMEA tech map keywords for EU filtering
 const ARQUIMEA_EU_KEYWORDS = [
-  // UAS/UAV/Drones
-  "UAS", "UAV", "drone", "unmanned", "RPAS", "counter-UAS",
-  // Space & Satellite
-  "space", "satellite", "Copernicus", "Galileo", "ESA", "orbit", "launcher",
-  // Defense
-  "defence", "defense", "EDF", "EDIRPA", "ASAP", "military", "dual-use",
-  // Sensors & ISR
-  "sensor", "radar", "lidar", "surveillance", "ISR", "optical", "infrared",
-  // Quantum & Photonics
-  "quantum", "photonic", "PIC", "gyroscope", "inertial",
-  // Naval & Maritime
-  "maritime", "naval", "USV", "UUV", "autonomous vessel",
-  // Communications
-  "secure communication", "SATCOM", "5G", "6G",
-  // Robotics
-  "robotic", "autonomous system", "actuator",
-  // Aerospace
+  "UAS", "UAV", "drone", "unmanned", "RPAS",
+  "space", "satellite", "Copernicus", "Galileo", "ESA", "orbit",
+  "defence", "defense", "EDF", "military", "dual-use",
+  "sensor", "radar", "lidar", "surveillance", "optical",
+  "quantum", "photonic", "gyroscope", "inertial",
+  "maritime", "naval", "autonomous",
   "aerospace", "propulsion", "aircraft",
-  // Biosensors
-  "biosensor", "health monitoring",
-  // Programs
-  "Horizon Europe", "Digital Europe", "EDIDP",
+  "robotic", "actuator",
+  "Horizon", "Digital Europe",
 ]
 
 export interface EUGrant {
@@ -40,239 +33,152 @@ export interface EUGrant {
 }
 
 export class EUFundingFetcher {
-  // Check if opportunity matches ARQUIMEA tech map
   private matchesArquimeaTechMap(title: string, description: string): boolean {
     const text = `${title} ${description}`.toLowerCase()
     return ARQUIMEA_EU_KEYWORDS.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()))
   }
 
   async fetchAllGrants(keyword?: string): Promise<EUGrant[]> {
-    console.log("[v0] EU - Fetching grants (ARQUIMEA tech map)...")
+    console.log("[v0] EU - Attempting to fetch real grants from EU APIs...")
 
     const allGrants: EUGrant[] = []
 
-    // Search with multiple ARQUIMEA-relevant terms
-    const searchTerms = ["defence space", "UAV drone", "quantum sensor", "satellite"]
-    
-    for (const term of searchTerms) {
-      try {
-        const grants = await this.fetchFromDataEuropaAPI(term)
-        const relevant = grants.filter(g => 
-          this.matchesArquimeaTechMap(g.title, g.description)
-        )
-        allGrants.push(...relevant)
-        console.log(`[v0] EU - data.europa "${term}": ${relevant.length} relevant`)
-      } catch (error) {
-        console.error(`[v0] EU - data.europa "${term}" error:`, error)
-      }
-    }
-
-    // Also try TED for procurement
+    // Try EU Funding & Tenders Portal SEDIA API
     try {
-      const tedGrants = await this.fetchFromTEDAPI("defence")
-      const relevantTed = tedGrants.filter(g => 
-        this.matchesArquimeaTechMap(g.title, g.description)
-      )
-      allGrants.push(...relevantTed)
-      console.log(`[v0] EU - TED defence: ${relevantTed.length} relevant`)
+      const sediaGrants = await this.fetchFromSEDIA(keyword)
+      allGrants.push(...sediaGrants)
     } catch (error) {
-      console.error("[v0] EU - TED error:", error)
+      console.error("[v0] EU - SEDIA API error:", error)
     }
 
-    // Remove duplicates by ID
-    const uniqueGrants = allGrants.filter((grant, index, self) =>
-      index === self.findIndex(g => g.id === grant.id)
+    // Try TED (Tenders Electronic Daily) API
+    try {
+      const tedGrants = await this.fetchFromTED(keyword)
+      allGrants.push(...tedGrants)
+    } catch (error) {
+      console.error("[v0] EU - TED API error:", error)
+    }
+
+    // Remove duplicates
+    const uniqueGrants = allGrants.filter((g, i, self) => 
+      i === self.findIndex(x => x.id === g.id)
     )
 
-    console.log(`[v0] EU - Total ARQUIMEA-relevant grants: ${uniqueGrants.length}`)
+    console.log(`[v0] EU - Total REAL grants found: ${uniqueGrants.length}`)
     return uniqueGrants
   }
 
-  private async fetchFromDataEuropaAPI(searchQuery: string): Promise<EUGrant[]> {
-    
-    try {
-      // data.europa.eu Search API
-      const response = await fetch(
-        `https://data.europa.eu/api/hub/search/search?q=${encodeURIComponent(searchQuery)}&filter=dataset&limit=30&page=0`,
-        {
-          headers: {
-            "Accept": "application/json",
-          },
+  private async fetchFromSEDIA(keyword?: string): Promise<EUGrant[]> {
+    const searchTerms = keyword && keyword !== "all" ? [keyword] : ["defence", "space", "drone"]
+    const grants: EUGrant[] = []
+
+    for (const term of searchTerms) {
+      try {
+        // EU Funding Portal SEDIA search API
+        const response = await fetch(
+          `https://api.tech.ec.europa.eu/search-api/prod/rest/search?apiKey=SEDIA&text=${encodeURIComponent(term)}&pageSize=20&pageNumber=1`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({
+              bool: {
+                must: [{ terms: { type: ["1"] } }] // Topics/Calls
+              }
+            })
+          }
+        )
+
+        if (!response.ok) {
+          console.log(`[v0] EU SEDIA - HTTP ${response.status} for "${term}"`)
+          continue
         }
+
+        const data = await response.json()
+        if (data.results && Array.isArray(data.results)) {
+          for (const item of data.results) {
+            if (item.identifier && item.title && this.matchesArquimeaTechMap(item.title, item.description || "")) {
+              grants.push({
+                id: item.identifier,
+                title: item.title,
+                organization: item.programmeName || "European Commission",
+                publishDate: item.publicationDate || "",
+                deadline: item.deadlineDate || "",
+                amount: item.budget || "",
+                category: item.typeName || "EU Funding",
+                description: item.description || item.title,
+                expedient: item.identifier,
+                sourceUrl: `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${item.identifier.toLowerCase()}`,
+                source: "eu",
+                url: `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${item.identifier.toLowerCase()}`,
+              })
+            }
+          }
+        }
+        console.log(`[v0] EU SEDIA - "${term}": ${grants.length} relevant`)
+      } catch (error) {
+        console.error(`[v0] EU SEDIA - Error for "${term}":`, error)
+      }
+    }
+
+    return grants
+  }
+
+  private async fetchFromTED(keyword?: string): Promise<EUGrant[]> {
+    const searchTerm = keyword && keyword !== "all" ? keyword : "defence"
+    const grants: EUGrant[] = []
+
+    try {
+      // TED API v3
+      const response = await fetch(
+        `https://ted.europa.eu/api/v3.0/notices/search?q=${encodeURIComponent(searchTerm)}&pageNum=1&pageSize=20&scope=3&sortField=PD&sortOrder=desc`,
+        { headers: { "Accept": "application/json" } }
       )
 
       if (!response.ok) {
-        console.log(`[v0] EU - data.europa.eu API returned ${response.status}`)
-        return []
+        console.log(`[v0] EU TED - HTTP ${response.status}`)
+        return grants
       }
 
-      const contentType = response.headers.get("content-type")
-      if (!contentType?.includes("application/json")) {
-        console.log("[v0] EU - data.europa.eu returned non-JSON")
-        return []
+      // Check if response has content before parsing
+      const text = await response.text()
+      if (!text || text.trim().length === 0) {
+        console.log("[v0] EU TED - Empty response body")
+        return grants
       }
 
-      const data = await response.json()
-      
-      if (!data.result?.results || !Array.isArray(data.result.results)) {
-        console.log("[v0] EU - No results in data.europa.eu response")
-        return []
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (parseError) {
+        console.log("[v0] EU TED - Invalid JSON response")
+        return grants
       }
 
-      return data.result.results
-        .filter((item: any) => {
-          // Filter for funding/tender related datasets
-          // Handle both string and object {en: "..."} formats
-          const rawTitle = item.title?.en || (typeof item.title === "string" ? item.title : "")
-          const rawDesc = item.description?.en || (typeof item.description === "string" ? item.description : "")
-          const title = String(rawTitle).toLowerCase()
-          const desc = String(rawDesc).toLowerCase()
-          return title.includes("fund") || title.includes("tender") || 
-                 title.includes("grant") || title.includes("call") ||
-                 desc.includes("funding") || desc.includes("tender")
-        })
-        .slice(0, 25)
-        .map((item: any) => this.mapDataEuropaResult(item))
-        .filter((item): item is EUGrant => item !== null)
-    } catch (error) {
-      console.error("[v0] EU - data.europa.eu API error:", error)
-      return []
-    }
-  }
-
-  private async fetchFromTEDAPI(keyword?: string): Promise<EUGrant[]> {
-    // TED (Tenders Electronic Daily) - Official EU procurement
-    const searchQuery = keyword && keyword !== "all" && keyword !== "*" 
-      ? keyword 
-      : ""
-    
-    try {
-      // TED Search API endpoint
-      const response = await fetch(
-        `https://ted.europa.eu/api/v3.0/notices/search?q=${encodeURIComponent(searchQuery || "*")}&pageNum=1&pageSize=30&scope=3&sortField=PD&sortOrder=desc`,
-        {
-          headers: {
-            "Accept": "application/json",
-          },
+      if (data && data.notices && Array.isArray(data.notices)) {
+        for (const item of data.notices) {
+          if (item.noticeNumber && item.title && this.matchesArquimeaTechMap(item.title, item.shortDescription || "")) {
+            grants.push({
+              id: item.noticeNumber,
+              title: item.title,
+              organization: item.buyerName || "EU Institution",
+              publishDate: item.publicationDate || "",
+              deadline: item.deadline || "",
+              amount: item.estimatedValue ? `EUR ${item.estimatedValue}` : "",
+              category: item.cpvDescription || "EU Tender",
+              description: item.shortDescription || item.title,
+              expedient: item.noticeNumber,
+              sourceUrl: `https://ted.europa.eu/en/notice/-/detail/${item.noticeNumber}`,
+              source: "eu",
+              url: `https://ted.europa.eu/en/notice/-/detail/${item.noticeNumber}`,
+            })
+          }
         }
-      )
-
-      if (!response.ok) {
-        console.log(`[v0] EU - TED API returned ${response.status}`)
-        // Try alternative TED endpoint
-        return await this.fetchFromTEDAlternative(searchQuery)
       }
-
-      const contentType = response.headers.get("content-type")
-      if (!contentType?.includes("application/json")) {
-        return await this.fetchFromTEDAlternative(searchQuery)
-      }
-
-      const data = await response.json()
-      
-      if (!data.notices || !Array.isArray(data.notices)) {
-        return await this.fetchFromTEDAlternative(searchQuery)
-      }
-
-      return data.notices
-        .map((item: any) => this.mapTEDResult(item))
-        .filter((item): item is EUGrant => item !== null)
+      console.log(`[v0] EU TED - Found ${grants.length} relevant notices`)
     } catch (error) {
-      console.error("[v0] EU - TED API error:", error)
-      return await this.fetchFromTEDAlternative(keyword)
+      console.log("[v0] EU TED - API not available or error occurred")
     }
-  }
 
-  private async fetchFromTEDAlternative(keyword?: string): Promise<EUGrant[]> {
-    try {
-      // Alternative: TED RSS/Atom feed converted to JSON
-      const response = await fetch(
-        `https://ted.europa.eu/api/v2.0/notices/search?q=*&pageNum=1&pageSize=25&scope=3`,
-        {
-          headers: {
-            "Accept": "application/json",
-          },
-        }
-      )
-
-      if (!response.ok) {
-        console.log("[v0] EU - TED Alternative API also failed")
-        return []
-      }
-
-      const contentType = response.headers.get("content-type")
-      if (!contentType?.includes("application/json")) {
-        console.log("[v0] EU - TED Alternative returned non-JSON")
-        return []
-      }
-
-      const data = await response.json()
-      
-      if (data.results && Array.isArray(data.results)) {
-        return data.results
-          .map((item: any) => this.mapTEDResult(item))
-          .filter((item): item is EUGrant => item !== null)
-      }
-      
-      return []
-    } catch (error) {
-      console.error("[v0] EU - TED Alternative error:", error)
-      return []
-    }
-  }
-
-  private mapDataEuropaResult(item: any): EUGrant | null {
-    if (!item) return null
-
-    const id = item.id || item.identifier
-    if (!id) return null
-    
-    const title = item.title?.en || item.title || ""
-    if (!title) return null
-    
-    const url = item.landingPage || item.accessUrl || 
-                `https://data.europa.eu/data/datasets/${id}`
-
-    return {
-      id: id,
-      title: title,
-      organization: item.publisher?.name || "European Commission",
-      publishDate: item.issued || item.modified || "",
-      deadline: "",
-      amount: "",
-      category: item.theme?.[0] || "EU Data",
-      description: item.description?.en || item.description || title,
-      expedient: id,
-      sourceUrl: url,
-      source: "eu",
-      url: url,
-    }
-  }
-
-  private mapTEDResult(item: any): EUGrant | null {
-    if (!item) return null
-
-    const id = item.noticeNumber || item.tedNoticeId || item.id
-    if (!id) return null
-    
-    const title = item.title || item.shortDescription || ""
-    if (!title) return null
-    
-    const url = `https://ted.europa.eu/en/notice/-/detail/${id}`
-
-    return {
-      id: id,
-      title: title,
-      organization: item.buyerName || item.authorityName || "EU Institution",
-      publishDate: item.publicationDate || item.dispatchDate || "",
-      deadline: item.deadline || item.timeLimit || "",
-      amount: item.estimatedValue ? `${item.estimatedValue} EUR` : "",
-      category: item.cpvDescription || item.procedureType || "EU Tender",
-      description: item.description || item.shortDescription || title,
-      expedient: id,
-      sourceUrl: url,
-      source: "eu",
-      url: url,
-    }
+    return grants
   }
 }

@@ -23,8 +23,8 @@ export class SAMGovFetcher {
 
     try {
       if (!this.apiKey || this.apiKey.trim().length === 0 || this.apiKey === "demo") {
-        console.log("[v0] SAM.gov API key not set or empty, using fallback tenders")
-        return this.getFallbackTenders()
+        console.log("[v0] SAM.gov API key not set - cannot fetch real data without API key")
+        return [] // Return empty - no simulated data
       }
 
       const today = new Date()
@@ -82,8 +82,8 @@ export class SAMGovFetcher {
       const opportunities = data.opportunitiesData || []
       
       if (opportunities.length === 0) {
-        console.log("[v0] ⚠️ No se encontraron oportunidades, usando datos de fallback")
-        return this.getFallbackTenders()
+        console.log("[v0] SAM.gov - No opportunities found")
+        return []
       }
 
       const transformed = this.transformSAMData(opportunities)
@@ -91,57 +91,9 @@ export class SAMGovFetcher {
       
       return transformed
     } catch (error) {
-      console.error("[v0] ❌ Error obteniendo datos de SAM.gov:", error)
-      console.log("[v0] Usando datos de fallback de SAM.gov")
-      return this.getFallbackTenders()
+      console.error("[v0] SAM.gov - Error fetching data:", error)
+      return [] // Return empty - no simulated data
     }
-  }
-
-  private getFallbackTenders(): SAMTender[] {
-    return [
-      {
-        id: "W52P1J25R0045",
-        title: "Advanced Tactical Communication Systems for U.S. Army",
-        organization: "U.S. Army Contracting Command - Aberdeen Proving Ground",
-        publishDate: "2025-08-20",
-        deadline: "2025-12-25",
-        amount: "$8,500,000",
-        category: "Communication Systems",
-        description:
-          "Procurement of next-generation tactical communication systems to enhance battlefield connectivity and operational effectiveness for U.S. Army units",
-        expedient: "W52P1J25R0045",
-        sourceUrl:
-          "https://sam.gov/opp/W52P1J25R0045/view",
-      },
-      {
-        id: "N0001925R4089",
-        title: "Naval Air Defense Radar Modernization Program",
-        organization: "Naval Sea Systems Command (NAVSEA)",
-        publishDate: "2025-08-18",
-        deadline: "2025-12-30",
-        amount: "$12,300,000",
-        category: "Radar Systems",
-        description:
-          "Comprehensive modernization and upgrade of naval air defense radar systems for enhanced threat detection and tracking capabilities",
-        expedient: "N0001925R4089",
-        sourceUrl:
-          "https://sam.gov/opp/N0001925R4089/view",
-      },
-      {
-        id: "FA8625-25-R-6234",
-        title: "Cybersecurity Solutions for Air Force Networks",
-        organization: "Air Force Life Cycle Management Center",
-        publishDate: "2025-08-22",
-        deadline: "2026-01-05",
-        amount: "$15,700,000",
-        category: "Cybersecurity",
-        description:
-          "Development and implementation of advanced cybersecurity solutions to protect critical Air Force communication networks and data systems",
-        expedient: "FA8625-25-R-6234",
-        sourceUrl:
-          "https://sam.gov/opp/FA8625-25-R-6234/view",
-      },
-    ]
   }
 
   private transformSAMData(opportunities: any[]): SAMTender[] {

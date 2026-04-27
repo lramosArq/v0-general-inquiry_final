@@ -1,3 +1,29 @@
+// ARQUIMEA tech map keywords for Spanish tenders (defense, space, technology)
+const ARQUIMEA_ES_KEYWORDS = [
+  // Defense & Military
+  "defensa", "militar", "armamento", "ejercito", "armada", "dgam", "inta", "ceseden",
+  // Space & Satellite  
+  "espacio", "espacial", "satelite", "cdti", "esa", "inta", "copernicus", "galileo",
+  // UAS/Drones
+  "dron", "drone", "uas", "uav", "rpas", "aeronave no tripulada",
+  // Sensors & Electronics
+  "sensor", "radar", "electronico", "optica", "infrarrojo", "lidar",
+  // Naval
+  "naval", "buque", "submarino", "fragata", "navantia",
+  // Aerospace  
+  "aeronautico", "aeroespacial", "aviacion", "propulsion",
+  // Communications
+  "comunicaciones", "satcom", "antena", "telecomunicacion",
+  // Quantum & Photonics
+  "cuantico", "quantum", "fotonico", "laser",
+  // R&D
+  "i+d", "innovacion", "tecnologia", "investigacion",
+  // Robotics
+  "robotica", "autonomo", "actuador",
+  // Cybersecurity
+  "ciberseguridad", "ciberdefensa",
+]
+
 export interface SpainTender {
   id: string
   title: string
@@ -9,17 +35,25 @@ export interface SpainTender {
   description: string
   expedient: string
   sourceUrl: string
+  source?: "spain"
 }
 
 export class SpainApiFetcher {
   private baseUrl = "https://contrataciondelsectorpublico.gob.es/sindicacion"
 
+  // Check if tender matches ARQUIMEA tech map
+  private matchesArquimeaTechMap(title: string, summary: string, author: string): boolean {
+    const text = `${title} ${summary} ${author}`.toLowerCase()
+    return ARQUIMEA_ES_KEYWORDS.some(keyword => text.includes(keyword.toLowerCase()))
+  }
+
   async fetchDefenseTenders(): Promise<SpainTender[]> {
-    console.log("[v0] 🇪🇸 Iniciando obtención de licitaciones españolas desde Portal de Contratación...")
+    console.log("[v0] Spain PLACSP - Fetching defense/space tenders (ARQUIMEA tech map)...")
 
     try {
+      // PLACSP Atom feeds - main sources for Spanish public contracts
       const feedUrls = [
-        `${this.baseUrl}/sindicacion_643/licitaciones.atom`,
+        `${this.baseUrl}/sindicacion_643/licitacionesPerfilContratante_Defensa.atom`,
         `${this.baseUrl}/sindicacion_1044/licitacionesPerfilContratante.atom`,
         `${this.baseUrl}/sindicacion_1045/PlataformasAgregadasSinMenores.atom`,
       ]
@@ -34,11 +68,10 @@ export class SpainApiFetcher {
               Accept: "application/atom+xml, application/xml, text/xml",
               "User-Agent": "ArquiAlert/1.0",
             },
-            timeout: 15000,
           })
 
           if (!response.ok) {
-            console.log(`[v0] Error HTTP ${response.status} para feed: ${feedUrl}`)
+            console.log(`[v0] Spain PLACSP - HTTP ${response.status} for feed: ${feedUrl}`)
             continue
           }
 
@@ -46,24 +79,23 @@ export class SpainApiFetcher {
           const parsedTenders = this.parseSpanishXML(xmlText)
           allTenders.push(...parsedTenders)
 
-          if (allTenders.length >= 30) break
+          console.log(`[v0] Spain PLACSP - Feed returned ${parsedTenders.length} relevant tenders`)
         } catch (feedError) {
-          console.error(`[v0] Error procesando feed ${feedUrl}:`, feedError)
+          console.error(`[v0] Spain PLACSP - Error processing feed:`, feedError)
           continue
         }
       }
 
-      if (allTenders.length > 0) {
-        console.log(`[v0] 🇪🇸 Obtenidas ${allTenders.length} licitaciones reales de España`)
-        return allTenders
-      } else {
-        console.log("[v0] 🇪🇸 No se obtuvieron licitaciones reales, usando datos de fallback")
-        return this.getFallbackSpanishTenders()
-      }
+      // Remove duplicates
+      const uniqueTenders = allTenders.filter((t, i, self) => 
+        i === self.findIndex(x => x.id === t.id || x.title === t.title)
+      )
+
+      console.log(`[v0] Spain PLACSP - Total ARQUIMEA-relevant tenders: ${uniqueTenders.length}`)
+      return uniqueTenders
     } catch (error) {
-      console.error("[v0] Error obteniendo datos de España:", error)
-      console.log("[v0] Usando datos de fallback de España")
-      return this.getFallbackSpanishTenders()
+      console.error("[v0] Spain PLACSP - Error:", error)
+      return [] // Return empty - no simulated data
     }
   }
 
@@ -77,6 +109,7 @@ export class SpainApiFetcher {
       const summaryRegex = /<summary[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/summary>/s
       const updatedRegex = /<updated>(.*?)<\/updated>/s
       const authorRegex = /<author[^>]*>.*?<name[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/name>.*?<\/author>/s
+      const idRegex = /<id[^>]*>(.*?)<\/id>/s
 
       let match
       while ((match = entryRegex.exec(xmlText)) !== null) {
@@ -86,41 +119,37 @@ export class SpainApiFetcher {
         const summaryMatch = summaryRegex.exec(entry)
         const updatedMatch = updatedRegex.exec(entry)
         const authorMatch = authorRegex.exec(entry)
+        const idMatch = idRegex.exec(entry)
 
         if (titleMatch && linkMatch) {
           const title = titleMatch[1].trim()
           const summary = summaryMatch ? summaryMatch[1].trim() : ""
-          const author = authorMatch ? authorMatch[1].trim() : "Portal de Contratación del Sector Público"
+          const author = authorMatch ? authorMatch[1].trim() : "PLACSP"
 
-          const isDefenseRelated =
-            title.toLowerCase().includes("defensa") ||
-            title.toLowerCase().includes("militar") ||
-            title.toLowerCase().includes("armamento") ||
-            title.toLowerCase().includes("seguridad") ||
-            author.toLowerCase().includes("defensa") ||
-            author.toLowerCase().includes("militar") ||
-            summary.toLowerCase().includes("defensa") ||
-            summary.toLowerCase().includes("militar")
-
-          if (isDefenseRelated) {
+          // Filter for ARQUIMEA-relevant tenders only
+          if (this.matchesArquimeaTechMap(title, summary, author)) {
             let link = linkMatch[1]
             if (link && !link.startsWith("http")) {
               link = `https://contrataciondelsectorpublico.gob.es${link.startsWith("/") ? "" : "/"}${link}`
             }
 
+            // Extract expedient from ID or generate
+            const expedient = idMatch ? idMatch[1].split("/").pop() || "" : ""
+
             const tender: SpainTender = {
-              id: `ESP-REAL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              id: expedient || `PLACSP-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
               title: title,
               organization: author,
               publishDate: updatedMatch
                 ? new Date(updatedMatch[1]).toISOString().split("T")[0]
                 : new Date().toISOString().split("T")[0],
-              deadline: new Date(Date.now() + Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-              amount: `€${(Math.floor(Math.random() * 15000000) + 1000000).toLocaleString()}`,
-              category: "Defensa",
-              description: summary.substring(0, 300),
-              expedient: `ESP-${Date.now().toString().slice(-6)}`,
+              deadline: "",
+              amount: "",
+              category: this.categorizeArquimeaTender(title, summary),
+              description: summary.substring(0, 500),
+              expedient: expedient,
               sourceUrl: link,
+              source: "spain",
             }
 
             tenders.push(tender)
@@ -128,147 +157,22 @@ export class SpainApiFetcher {
         }
       }
     } catch (parseError) {
-      console.error("[v0] Error parseando XML español:", parseError)
+      console.error("[v0] Spain PLACSP - XML parse error:", parseError)
     }
 
-    return tenders.length > 0 ? tenders : this.getFallbackSpanishTenders()
+    return tenders
   }
 
-  private getFallbackSpanishTenders(): SpainTender[] {
-    return [
-      {
-        id: "ESP-2025-DEF-001",
-        title: "Suministro de Sistemas de Comunicaciones Tácticas para el Ejército de Tierra",
-        organization: "Ministerio de Defensa - ISDEFE",
-        publishDate: "2025-09-20",
-        deadline: "2025-11-25",
-        amount: "€12,500,000",
-        category: "Sistemas de Comunicación",
-        description:
-          "Adquisición de sistemas de comunicaciones tácticas seguras para unidades del Ejército de Tierra español",
-        expedient: "ESP-2025-DEF-COMTAC-001",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-001",
-      },
-      {
-        id: "ESP-2025-DEF-002",
-        title: "Mantenimiento de Vehículos Blindados BMR-600 - Lote 2",
-        organization: "Dirección General de Armamento y Material (DGAM)",
-        publishDate: "2025-09-18",
-        deadline: "2025-11-20",
-        amount: "€8,750,000",
-        category: "Mantenimiento Militar",
-        description: "Servicios de mantenimiento preventivo y correctivo de vehículos blindados BMR-600",
-        expedient: "ESP-2025-DGAM-BMR-002",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-002",
-      },
-      {
-        id: "ESP-2025-DEF-003",
-        title: "Adquisición de Sistemas de Vigilancia Electrónica Naval",
-        organization: "Armada Española - AJEMA",
-        publishDate: "2025-09-15",
-        deadline: "2025-12-10",
-        amount: "€22,300,000",
-        category: "Sistemas Navales",
-        description:
-          "Adquisición e instalación de sistemas avanzados de vigilancia electrónica para buques de la Armada",
-        expedient: "ESP-2025-ARMADA-SVE-003",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-003",
-      },
-      {
-        id: "ESP-2025-DEF-004",
-        title: "Modernización de Sistemas de Radar del Ejército del Aire",
-        organization: "Ejército del Aire y del Espacio",
-        publishDate: "2025-09-12",
-        deadline: "2025-11-30",
-        amount: "€18,900,000",
-        category: "Sistemas Radar",
-        description: "Proyecto de modernización integral de sistemas de radar para defensa aérea",
-        expedient: "ESP-2025-EA-RADAR-004",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-004",
-      },
-      {
-        id: "ESP-2025-DEF-005",
-        title: "Suministro de Equipos de Protección NRBQ",
-        organization: "Unidad Militar de Emergencias (UME)",
-        publishDate: "2025-09-10",
-        deadline: "2025-10-25",
-        amount: "€5,600,000",
-        category: "Equipamiento Militar",
-        description: "Adquisición de equipos de protección nuclear, radiológica, biológica y química",
-        expedient: "ESP-2025-UME-NRBQ-005",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-005",
-      },
-      {
-        id: "ESP-2025-DEF-006",
-        title: "Servicios de Ciberseguridad para Infraestructuras Críticas",
-        organization: "Centro Criptológico Nacional (CCN)",
-        publishDate: "2025-09-08",
-        deadline: "2025-11-15",
-        amount: "€14,200,000",
-        category: "Ciberseguridad",
-        description:
-          "Servicios especializados de ciberseguridad para protección de infraestructuras críticas de defensa",
-        expedient: "ESP-2025-CCN-CYBER-006",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-006",
-      },
-      {
-        id: "ESP-2025-DEF-007",
-        title: "Adquisición de Drones de Reconocimiento Táctico",
-        organization: "Mando de Operaciones Especiales (MOE)",
-        publishDate: "2025-09-05",
-        deadline: "2025-12-01",
-        amount: "€9,800,000",
-        category: "Sistemas Aéreos",
-        description: "Adquisición de sistemas aéreos no tripulados para misiones de reconocimiento táctico",
-        expedient: "ESP-2025-MOE-DRONE-007",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-007",
-      },
-      {
-        id: "ESP-2025-DEF-008",
-        title: "Mantenimiento de Sistemas de Armas Ligeras",
-        organization: "Fábrica de Armas de La Coruña",
-        publishDate: "2025-09-03",
-        deadline: "2025-10-20",
-        amount: "€3,400,000",
-        category: "Mantenimiento Militar",
-        description: "Servicios de mantenimiento y reparación de sistemas de armas ligeras",
-        expedient: "ESP-2025-FAC-ARMAS-008",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-008",
-      },
-      {
-        id: "ESP-2025-DEF-009",
-        title: "Sistema Integrado de Gestión Logística Militar",
-        organization: "Mando de Apoyo Logístico del Ejército",
-        publishDate: "2025-09-01",
-        deadline: "2025-11-10",
-        amount: "€16,700,000",
-        category: "Sistemas de Información",
-        description: "Desarrollo e implementación de sistema integrado de gestión logística para el Ejército de Tierra",
-        expedient: "ESP-2025-MALE-LOG-009",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-009",
-      },
-      {
-        id: "ESP-2025-DEF-010",
-        title: "Adquisición de Simuladores de Vuelo Avanzados",
-        organization: "Academia General del Aire",
-        publishDate: "2025-08-28",
-        deadline: "2025-12-15",
-        amount: "€25,500,000",
-        category: "Simuladores",
-        description: "Adquisición de simuladores de vuelo de última generación para formación de pilotos militares",
-        expedient: "ESP-2025-AGA-SIM-010",
-        sourceUrl:
-          "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ESP-2025-DEF-010",
-      },
-    ]
+  private categorizeArquimeaTender(title: string, summary: string): string {
+    const text = `${title} ${summary}`.toLowerCase()
+    if (text.includes("espacio") || text.includes("satelite") || text.includes("esa")) return "Espacio"
+    if (text.includes("dron") || text.includes("uas") || text.includes("uav")) return "UAS/Drones"
+    if (text.includes("naval") || text.includes("buque") || text.includes("submarino")) return "Naval"
+    if (text.includes("radar") || text.includes("sensor") || text.includes("electronico")) return "Sensores"
+    if (text.includes("comunicacion") || text.includes("satcom")) return "Comunicaciones"
+    if (text.includes("ciberseguridad") || text.includes("ciberdefensa")) return "Ciberseguridad"
+    if (text.includes("aeronautico") || text.includes("aviacion")) return "Aeronautica"
+    if (text.includes("i+d") || text.includes("innovacion")) return "I+D"
+    return "Defensa"
   }
 }

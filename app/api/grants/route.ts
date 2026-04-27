@@ -3,6 +3,7 @@ import { GrantsGovFetcher } from "@/lib/grants-gov-fetcher"
 import { EUFundingFetcher } from "@/lib/eu-funding-fetcher"
 import { SAMGovFetcher } from "@/lib/sam-gov-fetcher"
 import { SpainGrantsFetcher } from "@/lib/spain-grants-fetcher"
+import { SpainApiFetcher } from "@/lib/spain-api-fetcher"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -155,19 +156,7 @@ export async function POST(request: NextRequest) {
           allGrants.push(...mappedSam)
           console.log(`[v0] SAM.gov fetched: ${filteredSam.length}`)
         } else {
-          console.log("[v0] SAM.gov API key empty or not configured, using fallback data")
-          const samFetcher = new SAMGovFetcher("")
-          const samTenders = await samFetcher.fetchDefenseTenders()
-          const samGrants = samTenders.map((t) => ({
-            id: t.id, title: t.title, organization: t.organization,
-            status: "Open", publishDate: t.publishDate, deadline: t.deadline,
-            description: t.description, category: t.category, amount: t.amount,
-            url: t.sourceUrl, expedient: t.expedient,
-          }))
-          const filteredSam = samGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
-          const mappedSam = filteredSam.map((g) => mapGrantToFrontend(g, "usa"))
-          allGrants.push(...mappedSam)
-          console.log(`[v0] SAM.gov fallback: ${filteredSam.length}`)
+          console.log("[v0] SAM.gov API key not configured - skipping (no simulated data)")
         }
       } catch (error) {
         console.error("[v0] Error fetching SAM.gov:", error)
@@ -189,22 +178,63 @@ export async function POST(request: NextRequest) {
 
     // Spain grants (BDNS, CDTI, AEI, PRTR, etc.)
     if (!source || source === "all" || source === "spain") {
+      // BDNS subsidies
       try {
         const spainFetcher = new SpainGrantsFetcher()
         const spainGrants = await spainFetcher.fetchAllGrants(keyword)
         const filteredSpain = spainGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
         const mappedSpainGrants = filteredSpain.map((g) => mapGrantToFrontend(g, "spain"))
         allGrants.push(...mappedSpainGrants)
-        console.log(`[v0] Spain grants fetched: ${filteredSpain.length}`)
+        console.log(`[v0] Spain BDNS grants fetched: ${filteredSpain.length}`)
       } catch (error) {
-        console.error("[v0] Error fetching Spain grants:", error)
+        console.error("[v0] Error fetching Spain BDNS grants:", error)
+      }
+
+      // PLACSP tenders (defense, space, technology) - ARQUIMEA relevant
+      try {
+        const placspFetcher = new SpainApiFetcher()
+        const placspTenders = await placspFetcher.fetchDefenseTenders()
+        const placspGrants = placspTenders.map((t) => ({
+          id: t.id,
+          title: t.title,
+          organization: t.organization,
+          status: "Open",
+          publishDate: t.publishDate,
+          deadline: t.deadline,
+          description: t.description,
+          category: t.category,
+          amount: t.amount,
+          url: t.sourceUrl,
+          expedient: t.expedient,
+          portal: "PLACSP",
+        }))
+        const filteredPlacsp = placspGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
+        const mappedPlacsp = filteredPlacsp.map((g) => mapGrantToFrontend(g, "spain"))
+        allGrants.push(...mappedPlacsp)
+        console.log(`[v0] Spain PLACSP tenders fetched: ${filteredPlacsp.length}`)
+      } catch (error) {
+        console.error("[v0] Error fetching Spain PLACSP tenders:", error)
       }
     }
 
     // Sort by posted date (newest first)
     allGrants.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime())
 
-    console.log(`[v0] Total grants returned: ${allGrants.length}`)
+    console.log(`[v0] Total REAL grants returned: ${allGrants.length}`)
+
+    // Build API status info
+    const samKeyConfigured = !!process.env.SAM_GOV_API_KEY && process.env.SAM_GOV_API_KEY.trim().length > 0
+    const apiStatus = {
+      grantsGov: { name: "Grants.gov (USA)", status: "active", note: "API publica - datos reales" },
+      samGov: { 
+        name: "SAM.gov (USA)", 
+        status: samKeyConfigured ? "active" : "unconfigured", 
+        note: samKeyConfigured ? "API con clave - datos reales" : "Requiere SAM_GOV_API_KEY" 
+      },
+      euFunding: { name: "EU Funding Portal", status: "limited", note: "API SEDIA/TED - datos reales si disponibles" },
+      spainBdns: { name: "BDNS (Spain)", status: "limited", note: "API REST - datos reales si disponibles" },
+      spainPlacsp: { name: "PLACSP (Spain)", status: "active", note: "Feed Atom - datos reales" },
+    }
 
     return NextResponse.json({
       success: true,
@@ -216,6 +246,10 @@ export async function POST(request: NextRequest) {
         eu: allGrants.filter((g) => g.source === "eu").length,
         spain: allGrants.filter((g) => g.source === "spain").length,
       },
+      apiStatus,
+      message: allGrants.length === 0 
+        ? "No se encontraron oportunidades reales. Algunas APIs tienen acceso limitado."
+        : `${allGrants.length} oportunidades REALES encontradas (sin datos simulados)`,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
@@ -280,7 +314,7 @@ export async function GET() {
       console.error("[v0] Error fetching EU grants:", error)
     }
 
-    // Fetch Spain grants
+    // Fetch Spain grants - BDNS
     try {
       const spainFetcher = new SpainGrantsFetcher()
       const spainGrants = await spainFetcher.fetchAllGrants()
@@ -288,7 +322,24 @@ export async function GET() {
       const mappedSpainGrants = filteredSpain.map((g) => mapGrantToFrontend(g, "spain"))
       allGrants.push(...mappedSpainGrants)
     } catch (error) {
-      console.error("[v0] Error fetching Spain grants:", error)
+      console.error("[v0] Error fetching Spain BDNS grants:", error)
+    }
+
+    // Fetch Spain tenders - PLACSP (defense, space)
+    try {
+      const placspFetcher = new SpainApiFetcher()
+      const placspTenders = await placspFetcher.fetchDefenseTenders()
+      const placspGrants = placspTenders.map((t) => ({
+        id: t.id, title: t.title, organization: t.organization,
+        status: "Open", publishDate: t.publishDate, deadline: t.deadline,
+        description: t.description, category: t.category, amount: t.amount,
+        url: t.sourceUrl, expedient: t.expedient, portal: "PLACSP",
+      }))
+      const filteredPlacsp = placspGrants.filter((g) => !isBlockedGrant(g))
+      const mappedPlacsp = filteredPlacsp.map((g) => mapGrantToFrontend(g, "spain"))
+      allGrants.push(...mappedPlacsp)
+    } catch (error) {
+      console.error("[v0] Error fetching Spain PLACSP tenders:", error)
     }
 
     // Sort by posted date

@@ -18,6 +18,7 @@ import { GPTSyncPanel } from "@/components/gpt-sync-panel"
 import { LoginScreen } from "@/components/login-screen"
 import { UserService, type User as UserType } from "@/lib/user-service"
 import { OpportunityClaimService, type OpportunityClaim } from "@/lib/opportunity-claim-service"
+import { TrainingStatsPanel } from "@/components/training-stats-panel"
 
 interface Grant {
   id: string
@@ -56,6 +57,7 @@ export default function GrantsSearchPage() {
   // Opportunity claims
   const [opportunityClaims, setOpportunityClaims] = useState<OpportunityClaim[]>([])
   const [showMyClaimsPanel, setShowMyClaimsPanel] = useState(false)
+  const [showTrainingStats, setShowTrainingStats] = useState(false)
 
   // Search filters
   const [keyword, setKeyword] = useState("")
@@ -113,28 +115,136 @@ export default function GrantsSearchPage() {
   })
 
   useEffect(() => {
-    const userService = UserService.getInstance()
-    const user = userService.getCurrentUser()
-    if (user) {
-      setCurrentUser({ ...user, alerts: user.alerts || [] })
-    }
-    setIsCheckingAuth(false)
-
-    // Load interest feedback from localStorage
-    try {
-      const savedFeedback = localStorage.getItem("grantInterestFeedback")
-      if (savedFeedback) {
-        const parsed = JSON.parse(savedFeedback)
-        setInterestFeedback(parsed)
-        const interested = Object.values(parsed).filter((v) => v === "interested").length
-        const notInterested = Object.values(parsed).filter((v) => v === "not_interested").length
-        setFeedbackStats({ interested, notInterested })
+    const initializeUser = async () => {
+      const userService = UserService.getInstance()
+      const user = userService.getCurrentUser()
+      if (user) {
+        console.log("[v0] Initializing user:", user.id, "with local alerts:", user.alerts?.length || 0)
+        
+        // Load alerts from server for this user
+        try {
+          const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
+          const result = await response.json()
+          console.log("[v0] Server alerts response:", result)
+          
+          if (result.success && result.data) {
+            // Merge server alerts with local alerts (server takes priority)
+            const serverAlerts = result.data || []
+            const localAlerts = user.alerts || []
+            
+            // Create a map of server alerts by ID
+            const alertsById = new Map()
+            serverAlerts.forEach((a: any) => alertsById.set(a.id, a))
+            
+            // Add local alerts that aren't on server yet
+            localAlerts.forEach((a: any) => {
+              if (!alertsById.has(a.id)) {
+                alertsById.set(a.id, a)
+                // Sync this local alert to server
+                fetch("/api/shared-data", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ type: "alerts", userId: user.id, action: "add", data: a }),
+                }).catch(() => {})
+              }
+            })
+            
+            const mergedAlerts = Array.from(alertsById.values())
+            user.alerts = mergedAlerts
+            console.log("[v0] Merged alerts count:", mergedAlerts.length)
+            
+            // Update localStorage with merged data
+            localStorage.setItem("arquimea_current_user", JSON.stringify(user))
+          }
+        } catch (e) {
+          console.log("[v0] Could not load alerts from server, using local data:", e)
+        }
+        setCurrentUser({ ...user, alerts: user.alerts || [] })
       }
-    } catch { /* ignore */ }
+      setIsCheckingAuth(false)
+    }
+    
+    initializeUser()
 
-    // Load opportunity claims
-    const claimService = OpportunityClaimService.getInstance()
-    setOpportunityClaims(claimService.getAllClaims())
+    // Load interest feedback from server first, then localStorage as fallback
+    const loadFeedback = async () => {
+      try {
+        const response = await fetch("/api/shared-data?type=feedback")
+        const result = await response.json()
+        if (result.success && Object.keys(result.data).length > 0) {
+          setInterestFeedback(result.data)
+          const interested = Object.values(result.data).filter((v) => v === "interested").length
+          const notInterested = Object.values(result.data).filter((v) => v === "not_interested").length
+          setFeedbackStats({ interested, notInterested })
+          localStorage.setItem("grantInterestFeedback", JSON.stringify(result.data))
+          return
+        }
+      } catch { /* continue to localStorage */ }
+      
+      // Fallback to localStorage
+      try {
+        const savedFeedback = localStorage.getItem("grantInterestFeedback")
+        if (savedFeedback) {
+          const parsed = JSON.parse(savedFeedback)
+          setInterestFeedback(parsed)
+          const interested = Object.values(parsed).filter((v) => v === "interested").length
+          const notInterested = Object.values(parsed).filter((v) => v === "not_interested").length
+          setFeedbackStats({ interested, notInterested })
+          // Sync to server
+          fetch("/api/shared-data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "feedback", action: "update", data: parsed }),
+          }).catch(() => {})
+        }
+      } catch { /* ignore */ }
+    }
+    
+    loadFeedback()
+
+    // Load and sync opportunity claims
+    const initializeClaims = async () => {
+      const claimService = OpportunityClaimService.getInstance()
+      await claimService.initialize()
+      setOpportunityClaims(claimService.getAllClaims())
+      
+      // Poll for updates every 3 seconds
+      const pollInterval = setInterval(async () => {
+        const freshClaims = await claimService.refreshClaims()
+        setOpportunityClaims(freshClaims)
+        
+        // Also refresh user alerts from server
+        const userService = UserService.getInstance()
+        const currentUserData = userService.getCurrentUser()
+        if (currentUserData) {
+          try {
+            const response = await fetch(`/api/shared-data?type=alerts&userId=${currentUserData.id}`)
+            const result = await response.json()
+            if (result.success && result.data) {
+              const updatedUser = { ...currentUserData, alerts: result.data }
+              localStorage.setItem("arquimea_current_user", JSON.stringify(updatedUser))
+              setCurrentUser(updatedUser)
+            }
+          } catch { /* ignore */ }
+        }
+        
+        // Refresh feedback from server
+        try {
+          const feedbackResponse = await fetch("/api/shared-data?type=feedback")
+          const feedbackResult = await feedbackResponse.json()
+          if (feedbackResult.success && Object.keys(feedbackResult.data).length > 0) {
+            setInterestFeedback(feedbackResult.data)
+            const interested = Object.values(feedbackResult.data).filter((v) => v === "interested").length
+            const notInterested = Object.values(feedbackResult.data).filter((v) => v === "not_interested").length
+            setFeedbackStats({ interested, notInterested })
+          }
+        } catch { /* ignore */ }
+      }, 5000)
+      
+      return () => clearInterval(pollInterval)
+    }
+    
+    initializeClaims()
   }, [])
 
   useEffect(() => {
@@ -193,6 +303,7 @@ export default function GrantsSearchPage() {
 
   const handleInterestFeedback = (grantId: string, interest: "interested" | "not_interested") => {
     const newFeedback = { ...interestFeedback }
+    const grant = grants.find((g) => g.id === grantId)
     
     // Toggle: if same value clicked again, remove feedback
     if (newFeedback[grantId] === interest) {
@@ -208,9 +319,41 @@ export default function GrantsSearchPage() {
     const notInterested = Object.values(newFeedback).filter((v) => v === "not_interested").length
     setFeedbackStats({ interested, notInterested })
 
-    // Persist to localStorage
+    // Persist to localStorage and sync to server
     try {
       localStorage.setItem("grantInterestFeedback", JSON.stringify(newFeedback))
+      
+      // Sync simple feedback format for other users
+      fetch("/api/shared-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "feedback", action: "update", data: newFeedback }),
+      }).catch(() => {})
+      
+      // Send detailed training data for AI learning
+      if (currentUser && grant && newFeedback[grantId]) {
+        fetch("/api/shared-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "training",
+            data: {
+              opportunityId: grantId,
+              userId: currentUser.id,
+              userName: currentUser.name,
+              businessUnit: currentUser.businessUnit,
+              feedback: interest,
+              opportunityData: {
+                title: grant.title,
+                agency: grant.agency,
+                category: grant.category,
+                source: grant.source,
+                keywords: grant.title.toLowerCase().split(/\s+/).filter((w: string) => w.length > 4),
+              },
+            },
+          }),
+        }).catch(() => {})
+      }
     } catch { /* ignore */ }
   }
 
@@ -373,21 +516,24 @@ export default function GrantsSearchPage() {
   }
 
   // Handle claiming/releasing an opportunity
-  const handleClaimOpportunity = (opportunityId: string) => {
+  const handleClaimOpportunity = async (opportunityId: string) => {
     if (!currentUser) return
     
     const claimService = OpportunityClaimService.getInstance()
-    const existingClaim = claimService.getClaim(opportunityId)
+    
+    // Refresh claims from server first
+    const freshClaims = await claimService.refreshClaims()
+    const existingClaim = freshClaims.find(c => c.opportunityId === opportunityId)
     
     if (existingClaim && existingClaim.claimedBy.id === currentUser.id) {
       // Release the claim
-      const result = claimService.releaseOpportunity(opportunityId, currentUser.id)
+      const result = await claimService.releaseOpportunity(opportunityId, currentUser.id)
       if (result.success) {
         setOpportunityClaims(claimService.getAllClaims())
       }
     } else if (!existingClaim) {
       // Claim the opportunity
-      const result = claimService.claimOpportunity(opportunityId, {
+      const result = await claimService.claimOpportunity(opportunityId, {
         id: currentUser.id,
         name: currentUser.name,
         email: currentUser.email,
@@ -396,6 +542,9 @@ export default function GrantsSearchPage() {
       if (result.success) {
         setOpportunityClaims(claimService.getAllClaims())
       }
+    } else {
+      // Another user claimed it, refresh UI
+      setOpportunityClaims(freshClaims)
     }
   }
 
@@ -724,17 +873,22 @@ export default function GrantsSearchPage() {
                         <h2 className="font-semibold text-[#1e3a5f]">
                           {isLoading ? "Loading..." : `${filteredGrants.length} Opportunities Found`}
                         </h2>
-                        {(feedbackStats.interested > 0 || feedbackStats.notInterested > 0) && (
-                          <div className="flex items-center gap-2 text-xs">
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                              <ThumbsUp className="h-3 w-3 mr-1" /> {feedbackStats.interested} Interested
-                            </Badge>
-                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                              <ThumbsDown className="h-3 w-3 mr-1" /> {feedbackStats.notInterested} Not Interested
-                            </Badge>
-                            <span className="text-gray-500">Training memory</span>
-                          </div>
-                        )}
+                {(feedbackStats.interested > 0 || feedbackStats.notInterested > 0) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowTrainingStats(true)}
+                    className="flex items-center gap-2 text-xs h-7 bg-purple-50 border-purple-200 hover:bg-purple-100"
+                  >
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 py-0">
+                      <ThumbsUp className="h-3 w-3 mr-1" /> {feedbackStats.interested}
+                    </Badge>
+                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 py-0">
+                      <ThumbsDown className="h-3 w-3 mr-1" /> {feedbackStats.notInterested}
+                    </Badge>
+                    <span className="text-purple-700 font-medium">Training Memory</span>
+                  </Button>
+                )}
                       </div>
                       <select
                         className="text-sm border rounded px-2 py-1"
@@ -949,6 +1103,9 @@ export default function GrantsSearchPage() {
           </div>
         )}
       </div>
+
+      {/* Training Stats Panel */}
+      <TrainingStatsPanel isOpen={showTrainingStats} onClose={() => setShowTrainingStats(false)} />
 
       {/* My Claims Panel */}
       {showMyClaimsPanel && (

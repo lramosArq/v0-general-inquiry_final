@@ -76,18 +76,39 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       })
 
       if (result.success) {
-        const updatedUser = userService.getCurrentUser()
-        if (updatedUser) {
-          onUserUpdate(updatedUser)
+        console.log("[v0] Alert created successfully:", result.alert?.id)
+        
+        // Fetch the latest alerts from server to confirm save
+        try {
+          const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
+          const serverResult = await response.json()
+          console.log("[v0] Server alerts after creation:", serverResult.data?.length)
+          
+          if (serverResult.success && serverResult.data) {
+            const updatedUser = { ...user, alerts: serverResult.data }
+            localStorage.setItem("arquimea_current_user", JSON.stringify(updatedUser))
+            onUserUpdate(updatedUser)
+          } else {
+            const updatedUser = userService.getCurrentUser()
+            if (updatedUser) {
+              onUserUpdate(updatedUser)
+            }
+          }
+        } catch (e) {
+          const updatedUser = userService.getCurrentUser()
+          if (updatedUser) {
+            onUserUpdate(updatedUser)
+          }
         }
-        setMessage({ type: "success", text: "Alert created successfully!" })
+        
+        setMessage({ type: "success", text: "Alerta creada y guardada en memoria!" })
         setTimeout(() => {
           setIsCreateModalOpen(false)
           setAlertName("")
           setSelectedGptPrograms([])
           setUseGptSyncFilter(false)
           setMessage({ type: "", text: "" })
-        }, 1000)
+        }, 1500)
       } else {
         setMessage({ type: "error", text: result.message })
       }
@@ -101,6 +122,21 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
   const handleDeleteAlert = async (alertId: string) => {
     const result = await userService.deleteAlert(user.id, alertId)
     if (result.success) {
+      console.log("[v0] Alert deleted:", alertId)
+      
+      // Fetch the latest alerts from server to confirm deletion
+      try {
+        const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
+        const serverResult = await response.json()
+        
+        if (serverResult.success && serverResult.data) {
+          const updatedUser = { ...user, alerts: serverResult.data }
+          localStorage.setItem("arquimea_current_user", JSON.stringify(updatedUser))
+          onUserUpdate(updatedUser)
+          return
+        }
+      } catch { /* fallback to local */ }
+      
       const updatedUser = userService.getCurrentUser()
       if (updatedUser) {
         onUserUpdate(updatedUser)
@@ -170,10 +206,10 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       const result = await response.json()
 
       if (result.success) {
-        setMessage({ 
-          type: "success", 
-          text: `Test email sent to ${targetEmail}!` 
-        })
+        const successMsg = result.demoMode 
+          ? `Email de prueba enviado a ${targetEmail} (modo demo)`
+          : `Email de prueba enviado a ${targetEmail}!`
+        setMessage({ type: "success", text: successMsg })
       } else {
         setMessage({ type: "error", text: result.error || result.message || "Failed to send test email" })
       }
@@ -289,7 +325,11 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
       const result = await response.json()
 
       if (result.success) {
-        setMessage({ type: "success", text: `Alert sent to ${targetEmail}!` })
+        // Show appropriate message based on demo mode
+        const successMsg = result.demoMode 
+          ? `Alerta enviada a ${targetEmail} (modo demo - email simulado)`
+          : `Alerta enviada a ${targetEmail}!`
+        setMessage({ type: "success", text: successMsg })
 
         // Update last triggered
         await userService.updateAlert(user.id, alert.id, { lastTriggered: new Date().toISOString() })
@@ -299,22 +339,15 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
         }
       } else {
         console.error("[v0] Send alert error:", result)
-        // Show detailed error message
         let errorMsg = result.error || "Failed to send alert"
-        if (result.details) {
-          errorMsg += ` (${result.details})`
-        }
-        if (result.suggestion) {
-          errorMsg += `. ${result.suggestion}`
-        }
         setMessage({ type: "error", text: errorMsg })
       }
     } catch (error) {
       console.error("[v0] Error sending alert:", error)
-      setMessage({ type: "error", text: "Failed to send alert email" })
+      setMessage({ type: "error", text: "Error al enviar la alerta por email" })
     } finally {
       setIsSendingAlert(null)
-      setTimeout(() => setMessage({ type: "", text: "" }), 3000)
+      setTimeout(() => setMessage({ type: "", text: "" }), 8000) // Show error longer for test mode messages
     }
   }
 

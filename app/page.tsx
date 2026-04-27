@@ -120,21 +120,58 @@ export default function GrantsSearchPage() {
     }
     setIsCheckingAuth(false)
 
-    // Load interest feedback from localStorage
-    try {
-      const savedFeedback = localStorage.getItem("grantInterestFeedback")
-      if (savedFeedback) {
-        const parsed = JSON.parse(savedFeedback)
-        setInterestFeedback(parsed)
-        const interested = Object.values(parsed).filter((v) => v === "interested").length
-        const notInterested = Object.values(parsed).filter((v) => v === "not_interested").length
-        setFeedbackStats({ interested, notInterested })
-      }
-    } catch { /* ignore */ }
+    // Load interest feedback from server first, then localStorage as fallback
+    const loadFeedback = async () => {
+      try {
+        const response = await fetch("/api/shared-data?type=feedback")
+        const result = await response.json()
+        if (result.success && Object.keys(result.data).length > 0) {
+          setInterestFeedback(result.data)
+          const interested = Object.values(result.data).filter((v) => v === "interested").length
+          const notInterested = Object.values(result.data).filter((v) => v === "not_interested").length
+          setFeedbackStats({ interested, notInterested })
+          localStorage.setItem("grantInterestFeedback", JSON.stringify(result.data))
+          return
+        }
+      } catch { /* continue to localStorage */ }
+      
+      // Fallback to localStorage
+      try {
+        const savedFeedback = localStorage.getItem("grantInterestFeedback")
+        if (savedFeedback) {
+          const parsed = JSON.parse(savedFeedback)
+          setInterestFeedback(parsed)
+          const interested = Object.values(parsed).filter((v) => v === "interested").length
+          const notInterested = Object.values(parsed).filter((v) => v === "not_interested").length
+          setFeedbackStats({ interested, notInterested })
+          // Sync to server
+          fetch("/api/shared-data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "feedback", action: "update", data: parsed }),
+          }).catch(() => {})
+        }
+      } catch { /* ignore */ }
+    }
+    
+    loadFeedback()
 
-    // Load opportunity claims
-    const claimService = OpportunityClaimService.getInstance()
-    setOpportunityClaims(claimService.getAllClaims())
+    // Load and sync opportunity claims
+    const initializeClaims = async () => {
+      const claimService = OpportunityClaimService.getInstance()
+      await claimService.initialize()
+      setOpportunityClaims(claimService.getAllClaims())
+      
+      // Poll for updates every 3 seconds
+      const pollInterval = setInterval(async () => {
+        const freshClaims = await claimService.refreshClaims()
+        setOpportunityClaims(freshClaims)
+      }, 3000)
+      
+      return () => clearInterval(pollInterval)
+    }
+    
+    initializeClaims()
   }, [])
 
   useEffect(() => {
@@ -208,9 +245,15 @@ export default function GrantsSearchPage() {
     const notInterested = Object.values(newFeedback).filter((v) => v === "not_interested").length
     setFeedbackStats({ interested, notInterested })
 
-    // Persist to localStorage
+    // Persist to localStorage and sync to server
     try {
       localStorage.setItem("grantInterestFeedback", JSON.stringify(newFeedback))
+      // Sync to shared server for other users
+      fetch("/api/shared-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "feedback", action: "update", data: newFeedback }),
+      }).catch(() => {})
     } catch { /* ignore */ }
   }
 
@@ -373,21 +416,24 @@ export default function GrantsSearchPage() {
   }
 
   // Handle claiming/releasing an opportunity
-  const handleClaimOpportunity = (opportunityId: string) => {
+  const handleClaimOpportunity = async (opportunityId: string) => {
     if (!currentUser) return
     
     const claimService = OpportunityClaimService.getInstance()
-    const existingClaim = claimService.getClaim(opportunityId)
+    
+    // Refresh claims from server first
+    const freshClaims = await claimService.refreshClaims()
+    const existingClaim = freshClaims.find(c => c.opportunityId === opportunityId)
     
     if (existingClaim && existingClaim.claimedBy.id === currentUser.id) {
       // Release the claim
-      const result = claimService.releaseOpportunity(opportunityId, currentUser.id)
+      const result = await claimService.releaseOpportunity(opportunityId, currentUser.id)
       if (result.success) {
         setOpportunityClaims(claimService.getAllClaims())
       }
     } else if (!existingClaim) {
       // Claim the opportunity
-      const result = claimService.claimOpportunity(opportunityId, {
+      const result = await claimService.claimOpportunity(opportunityId, {
         id: currentUser.id,
         name: currentUser.name,
         email: currentUser.email,
@@ -396,6 +442,9 @@ export default function GrantsSearchPage() {
       if (result.success) {
         setOpportunityClaims(claimService.getAllClaims())
       }
+    } else {
+      // Another user claimed it, refresh UI
+      setOpportunityClaims(freshClaims)
     }
   }
 

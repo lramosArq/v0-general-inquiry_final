@@ -1,3 +1,5 @@
+import { sharedDataService } from "./shared-data-service"
+
 // User and Alert types
 export interface UserAlert {
   id: string
@@ -292,6 +294,13 @@ export class UserService {
       localStorage.setItem(this.currentUserKey, JSON.stringify(users[userIndex]))
     }
 
+    // Sync to shared server
+    try {
+      await sharedDataService.addAlert(userId, newAlert)
+    } catch (e) {
+      console.log("[v0] Could not sync alert to server")
+    }
+
     return { success: true, message: "Alerta creada exitosamente", alert: newAlert }
   }
 
@@ -325,6 +334,13 @@ export class UserService {
   async deleteAlert(userId: string, alertId: string): Promise<{ success: boolean; message: string }> {
     const users = this.getUsers()
     const userIndex = users.findIndex((u) => u.id === userId)
+
+    // Sync deletion to server
+    try {
+      await sharedDataService.removeAlert(userId, alertId)
+    } catch (e) {
+      console.log("[v0] Could not sync alert deletion to server")
+    }
 
     if (userIndex === -1) {
       return { success: false, message: "Usuario no encontrado" }

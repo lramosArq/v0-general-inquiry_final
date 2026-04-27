@@ -203,43 +203,27 @@ export default function GrantsSearchPage() {
       const userService = UserService.getInstance()
       const user = userService.getCurrentUser()
       if (user) {
-        // Load alerts from server for this user
-        try {
-          const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
-          const result = await response.json()
-          
-          if (result.success && result.data) {
-            // Merge server alerts with local alerts (server takes priority)
-            const serverAlerts = result.data || []
-            const localAlerts = user.alerts || []
-            
-            // Create a map of server alerts by ID
-            const alertsById = new Map()
-            serverAlerts.forEach((a: any) => alertsById.set(a.id, a))
-            
-            // Add local alerts that aren't on server yet
-            localAlerts.forEach((a: any) => {
-              if (!alertsById.has(a.id)) {
-                alertsById.set(a.id, a)
-                // Sync this local alert to server
-                fetch("/api/shared-data", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ type: "alerts", userId: user.id, action: "add", data: a }),
-                }).catch(() => {})
-              }
-            })
-            
-            const mergedAlerts = Array.from(alertsById.values())
-            user.alerts = mergedAlerts
-            
-            // Update localStorage with merged data
-            localStorage.setItem("arquimea_current_user", JSON.stringify(user))
+        // LOCAL ALERTS HAVE PRIORITY - they are the source of truth
+        const localAlerts = user.alerts || []
+        
+        // Try to sync local alerts to server (fire and forget)
+        if (localAlerts.length > 0) {
+          try {
+            // Sync all local alerts to server to ensure persistence across sessions
+            for (const alert of localAlerts) {
+              fetch("/api/shared-data", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: "alerts", userId: user.id, action: "add", data: alert }),
+              }).catch(() => {})
+            }
+          } catch {
+            // Ignore sync errors - local data is preserved
           }
-        } catch {
-          // Could not load alerts from server, using local data
         }
-        setCurrentUser({ ...user, alerts: user.alerts || [] })
+        
+        // Always use local alerts as the source of truth
+        setCurrentUser({ ...user, alerts: localAlerts })
       }
       setIsCheckingAuth(false)
     }

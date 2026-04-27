@@ -39,17 +39,10 @@ export class SpainGrantsFetcher {
     const allGrants: SpainGrant[] = []
 
     // Add verified BDNS grants (manually verified from infosubvenciones.es)
+    // Note: BDNS API requires authentication, so we use manually verified data
     const verifiedBdnsGrants = this.getVerifiedBDNSGrants()
     allGrants.push(...verifiedBdnsGrants)
     console.log(`[v0] Spain BDNS - Added ${verifiedBdnsGrants.length} verified grants`)
-
-    // Try BDNS API for additional grants
-    try {
-      const bdnsGrants = await this.fetchFromBDNS(keyword)
-      allGrants.push(...bdnsGrants)
-    } catch (error) {
-      console.error("[v0] Spain BDNS API - Error:", error)
-    }
 
     // Try PLACSP (Portal de Contratacion del Sector Publico)
     try {
@@ -223,51 +216,6 @@ export class SpainGrantsFetcher {
         portal: "BDNS",
       },
     ]
-  }
-
-  private async fetchFromBDNS(keyword?: string): Promise<SpainGrant[]> {
-    const grants: SpainGrant[] = []
-    
-    try {
-      // BDNS tiene una API REST pero requiere autenticacion
-      // Intentamos el endpoint publico
-      const response = await fetch(
-        `https://www.pap.hacienda.gob.es/bdnstrans/api/convocatorias?pageSize=50`,
-        { headers: { "Accept": "application/json" } }
-      )
-
-      if (!response.ok) {
-        console.log(`[v0] Spain BDNS - HTTP ${response.status}`)
-        return grants
-      }
-
-      const data = await response.json()
-      if (data && Array.isArray(data.content)) {
-        for (const item of data.content) {
-          if (item.id && item.titulo && this.matchesArquimeaTechMap(item.titulo, item.descripcion || "")) {
-            grants.push({
-              id: `BDNS-${item.id}`,
-              title: item.titulo,
-              organization: item.organoDonante || "Administracion Publica",
-              publishDate: item.fechaPublicacion || "",
-              deadline: item.fechaFinPresentacion || "",
-              amount: item.importeMaximo ? `EUR ${item.importeMaximo}` : "",
-              category: item.tipoConvocatoria || "Subvencion",
-              description: item.descripcion || item.titulo,
-              expedient: item.codigo || item.id,
-              sourceUrl: `https://www.pap.hacienda.gob.es/bdnstrans/GE/es/convocatoria/${item.id}`,
-              source: "spain",
-              portal: "BDNS",
-            })
-          }
-        }
-      }
-      console.log(`[v0] Spain BDNS - Found ${grants.length} relevant grants`)
-    } catch (error) {
-      console.error("[v0] Spain BDNS - Fetch error:", error)
-    }
-
-    return grants
   }
 
   private async fetchFromPLACSP(keyword?: string): Promise<SpainGrant[]> {

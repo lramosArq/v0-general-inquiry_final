@@ -37,8 +37,9 @@ export class EUFundingFetcher {
     return filteredGrants
   }
 
-  private generateEUUrl(id: string): string {
-    return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${id.toLowerCase()}`
+private generateEUUrl(id: string): string {
+  // Use search URL which is more reliable than direct topic-details link
+  return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search;callCode=default;freeTextSearchKeyword=${encodeURIComponent(id)};matchWholeText=true;typeCodes=1,0;statusCodes=31094501,31094502,31094503`
   }
 
   private getVerifiedEUGrants(): EUGrant[] {

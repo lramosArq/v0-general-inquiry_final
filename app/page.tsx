@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X, Calendar, Bookmark, FolderOpen, Save, RotateCcw, Sparkles } from "lucide-react"
+import { Search, Globe, Flag, LogOut, Bell, BarChart3, Loader2, Plug, Bot, ThumbsUp, ThumbsDown, UserCheck, Users, Briefcase, X, Calendar, Bookmark, FolderOpen, Save, RotateCcw, Sparkles, Download } from "lucide-react"
+import { exportGrantsToExcel } from "@/lib/excel-export"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { MarketIntelligence } from "@/components/market-intelligence"
 import { APIConnectionsPanel, type APIConfig } from "@/components/api-connections-panel"
@@ -1474,16 +1475,28 @@ export default function GrantsSearchPage() {
                   </Button>
                 )}
                       </div>
-                      <select
-                        className="text-sm border rounded px-2 py-1"
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                      >
-                        <option value="posted-desc">Posted Date (Newest)</option>
-                        <option value="posted-asc">Posted Date (Oldest)</option>
-                        <option value="close-desc">Close Date (Latest)</option>
-                        <option value="close-asc">Close Date (Soonest)</option>
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportGrantsToExcel(filteredGrants)}
+                          disabled={filteredGrants.length === 0 || isLoading}
+                          className="flex items-center gap-1 text-xs h-8"
+                        >
+                          <Download className="h-3 w-3" />
+                          Excel
+                        </Button>
+                        <select
+                          className="text-sm border rounded px-2 py-1"
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                        >
+                          <option value="posted-desc">Posted Date (Newest)</option>
+                          <option value="posted-asc">Posted Date (Oldest)</option>
+                          <option value="close-desc">Close Date (Latest)</option>
+                          <option value="close-asc">Close Date (Soonest)</option>
+                        </select>
+                      </div>
                       </div>
                   </div>
 

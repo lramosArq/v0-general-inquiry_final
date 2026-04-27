@@ -19,7 +19,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UserService, type User, type UserAlert } from "@/lib/user-service"
 import { ARQUIMEA_PROGRAMS } from "@/components/gpt-sync-panel"
-import { Bell, Plus, Trash2, Mail, Loader2, Send, Bot } from "lucide-react"
+import { Bell, Plus, Trash2, Mail, Loader2, Send, Bot, Download } from "lucide-react"
+import { exportAlertMatchesToExcel } from "@/lib/excel-export"
 
 interface AlertsPanelProps {
   user: User
@@ -460,6 +461,14 @@ export function AlertsPanel({ user, onUserUpdate, currentFilters, grants }: Aler
                       />
                       <Mail className={`h-4 w-4 ${alert.emailNotifications ? "text-[#1e3a5f]" : "text-gray-300"}`} />
                     </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => exportAlertMatchesToExcel(alert, grants)}
+                      title="Download matching grants as Excel"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"

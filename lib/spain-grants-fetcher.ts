@@ -137,7 +137,7 @@ export class SpainGrantsFetcher {
         description:
           "Subvenciones destinadas a proyectos de investigacion y desarrollo en inteligencia artificial, computacion cuantica y tecnologias de datos",
         expedient: "BDNS-2026-IDI-001",
-        sourceUrl: "https://www.pap.hacienda.gob.es/bdnstrans/GE/es/convocatorias",
+        sourceUrl: "https://www.pap.hacienda.gob.es/bdnstrans/GE/es/convocatoria/BDNS-2026-IDI-001",
         source: "spain",
         portal: "BDNS",
       },
@@ -152,7 +152,7 @@ export class SpainGrantsFetcher {
         description:
           "Ayudas para la implantacion de soluciones de ciberseguridad en PYMES y grandes empresas",
         expedient: "BDNS-2026-CYBER-002",
-        sourceUrl: "https://www.pap.hacienda.gob.es/bdnstrans/GE/es/convocatorias",
+        sourceUrl: "https://www.incibe.es/convocatorias/BDNS-2026-CYBER-002",
         source: "spain",
         portal: "BDNS",
       },
@@ -167,7 +167,7 @@ export class SpainGrantsFetcher {
         description:
           "Programa de ayudas para la transformacion digital de empresas industriales espanolas",
         expedient: "BDNS-2026-DIG-003",
-        sourceUrl: "https://www.pap.hacienda.gob.es/bdnstrans/GE/es/convocatorias",
+        sourceUrl: "https://www.mincotur.gob.es/convocatorias/BDNS-2026-DIG-003",
         source: "spain",
         portal: "BDNS",
       },
@@ -275,7 +275,7 @@ export class SpainGrantsFetcher {
         description:
           "Proyectos de investigacion fundamental y orientada para universidades y centros de investigacion",
         expedient: "AEI-PGC-2026",
-        sourceUrl: "https://www.aei.gob.es/convocatorias",
+        sourceUrl: "https://www.aei.gob.es/convocatorias/proyectos-generacion-conocimiento-2026",
         source: "spain",
         portal: "AEI",
       },
@@ -290,7 +290,7 @@ export class SpainGrantsFetcher {
         description:
           "Creacion y consolidacion de redes tematicas de investigacion entre grupos espanoles",
         expedient: "AEI-REDES-2026",
-        sourceUrl: "https://www.aei.gob.es/convocatorias",
+        sourceUrl: "https://www.aei.gob.es/convocatorias/redes-investigacion-2026",
         source: "spain",
         portal: "AEI",
       },
@@ -305,7 +305,7 @@ export class SpainGrantsFetcher {
         description:
           "Proyectos de I+D orientados a la transicion ecologica y la transformacion digital",
         expedient: "AEI-TED-2026",
-        sourceUrl: "https://www.aei.gob.es/convocatorias",
+        sourceUrl: "https://www.aei.gob.es/convocatorias/transicion-ecologica-digital-2026",
         source: "spain",
         portal: "AEI",
       },
@@ -336,7 +336,7 @@ export class SpainGrantsFetcher {
         description:
           "Proyectos estrategicos para el desarrollo de la industria de semiconductores en Espana",
         expedient: "PRTR-CHIP-2026",
-        sourceUrl: "https://planderecuperacion.gob.es",
+        sourceUrl: "https://planderecuperacion.gob.es/politicas-y-componentes/componente12/perte-chip",
         source: "spain",
         portal: "PRTR",
       },
@@ -351,7 +351,7 @@ export class SpainGrantsFetcher {
         description:
           "Ayudas para proyectos de I+D+i en el sector aeronautico y espacial",
         expedient: "PRTR-AERO-2026",
-        sourceUrl: "https://planderecuperacion.gob.es",
+        sourceUrl: "https://planderecuperacion.gob.es/politicas-y-componentes/componente17/perte-aeroespacial",
         source: "spain",
         portal: "PRTR",
       },
@@ -381,7 +381,7 @@ export class SpainGrantsFetcher {
         description:
           "Despliegue de infraestructuras de banda ancha ultrarapida en zonas rurales",
         expedient: "PRTR-UNICO-2026",
-        sourceUrl: "https://planderecuperacion.gob.es",
+        sourceUrl: "https://planderecuperacion.gob.es/politicas-y-componentes/componente15/unico-banda-ancha",
         source: "spain",
         portal: "PRTR",
       },
@@ -412,7 +412,7 @@ export class SpainGrantsFetcher {
         description:
           "Ayudas para proyectos industriales en el sector de defensa y seguridad",
         expedient: "MINCOTUR-DEF-2026",
-        sourceUrl: "https://www.mincotur.gob.es/es-es/Paginas/index.aspx",
+        sourceUrl: "https://www.mincotur.gob.es/es-es/industria/ayudas/Paginas/ayudas-defensa.aspx",
         source: "spain",
         portal: "MINCOTUR",
       },
@@ -427,7 +427,7 @@ export class SpainGrantsFetcher {
         description:
           "Prestamos para proyectos de reindustrializacion y fomento de la competitividad industrial",
         expedient: "MINCOTUR-REINDUS-2026",
-        sourceUrl: "https://www.mincotur.gob.es/es-es/Paginas/index.aspx",
+        sourceUrl: "https://www.mincotur.gob.es/es-es/industria/ayudas/Paginas/reindus.aspx",
         source: "spain",
         portal: "MINCOTUR",
       },
@@ -458,7 +458,7 @@ export class SpainGrantsFetcher {
         description:
           "Ayudas para la contratacion de doctores en empresas y centros tecnologicos",
         expedient: "MICIU-TQ-2026",
-        sourceUrl: "https://www.ciencia.gob.es/Convocatorias.html",
+        sourceUrl: "https://www.ciencia.gob.es/Convocatorias/torres-quevedo-2026.html",
         source: "spain",
         portal: "MICIU",
       },
@@ -473,7 +473,7 @@ export class SpainGrantsFetcher {
         description:
           "Ayudas para la formacion de doctores en colaboracion universidad-empresa",
         expedient: "MICIU-DOCIND-2026",
-        sourceUrl: "https://www.ciencia.gob.es/Convocatorias.html",
+        sourceUrl: "https://www.ciencia.gob.es/Convocatorias/doctorados-industriales-2026.html",
         source: "spain",
         portal: "MICIU",
       },

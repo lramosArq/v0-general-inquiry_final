@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -203,13 +203,10 @@ export default function GrantsSearchPage() {
       const userService = UserService.getInstance()
       const user = userService.getCurrentUser()
       if (user) {
-        console.log("[v0] Initializing user:", user.id, "with local alerts:", user.alerts?.length || 0)
-        
         // Load alerts from server for this user
         try {
           const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
           const result = await response.json()
-          console.log("[v0] Server alerts response:", result)
           
           if (result.success && result.data) {
             // Merge server alerts with local alerts (server takes priority)
@@ -235,13 +232,12 @@ export default function GrantsSearchPage() {
             
             const mergedAlerts = Array.from(alertsById.values())
             user.alerts = mergedAlerts
-            console.log("[v0] Merged alerts count:", mergedAlerts.length)
             
             // Update localStorage with merged data
             localStorage.setItem("arquimea_current_user", JSON.stringify(user))
           }
-        } catch (e) {
-          console.log("[v0] Could not load alerts from server, using local data:", e)
+        } catch {
+          // Could not load alerts from server, using local data
         }
         setCurrentUser({ ...user, alerts: user.alerts || [] })
       }
@@ -331,11 +327,38 @@ export default function GrantsSearchPage() {
     }
   }, [currentUser, hasFetchedGrants])
 
+  // Apply filters only when grants are loaded initially
+  const hasAppliedInitialFilters = useRef(false)
+  
   useEffect(() => {
-    if (grants.length > 0) {
+    if (grants.length > 0 && !hasAppliedInitialFilters.current) {
+      hasAppliedInitialFilters.current = true
       applyFilters()
     }
-  }, [grants, keyword, opportunityNumber, promptSearch, sourceFilter, statusFilters, fundingInstruments, categoryFilters, sortBy, dateRangeFilter, releaseDateFilter, closeDateFilter, orbVentFilter, programFilter, typeFilter, naicsFilter])
+  }, [grants.length])
+
+  // Debounced filter application when filter values change
+  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  useEffect(() => {
+    // Skip if grants not loaded yet
+    if (grants.length === 0 || !hasAppliedInitialFilters.current) return
+    
+    // Debounce filter changes
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current)
+    }
+    
+    filterTimeoutRef.current = setTimeout(() => {
+      applyFilters()
+    }, 150) // 150ms debounce
+    
+    return () => {
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current)
+      }
+    }
+  }, [keyword, opportunityNumber, promptSearch, JSON.stringify(sourceFilter), JSON.stringify(statusFilters), JSON.stringify(fundingInstruments), JSON.stringify(categoryFilters), sortBy, JSON.stringify(dateRangeFilter), JSON.stringify(releaseDateFilter), JSON.stringify(closeDateFilter), JSON.stringify(orbVentFilter), JSON.stringify(programFilter), JSON.stringify(typeFilter), naicsFilter])
 
   // Load saved searches from server on mount
   useEffect(() => {
@@ -441,7 +464,7 @@ export default function GrantsSearchPage() {
   const fetchGrants = async () => {
     setIsLoading(true)
     try {
-      console.log("[v0] Fetching grants...")
+  
       // Load saved blocklist config
       let blocklist: { ids: string[]; keywords: string[] } | undefined
       try {
@@ -465,9 +488,7 @@ export default function GrantsSearchPage() {
 
       if (response.ok) {
         const result = await response.json()
-        console.log("[v0] API Response:", result)
-        const fetchedGrants = result.data || result.grants || []
-        console.log("[v0] Fetched grants count:", fetchedGrants.length)
+      const fetchedGrants = result.grants || []
         setGrants(fetchedGrants)
         setFilteredGrants(fetchedGrants)
       } else {

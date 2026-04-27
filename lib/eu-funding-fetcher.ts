@@ -139,8 +139,22 @@ export class EUFundingFetcher {
         return grants
       }
 
-      const data = await response.json()
-      if (data.notices && Array.isArray(data.notices)) {
+      // Check if response has content before parsing
+      const text = await response.text()
+      if (!text || text.trim().length === 0) {
+        console.log("[v0] EU TED - Empty response body")
+        return grants
+      }
+
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (parseError) {
+        console.log("[v0] EU TED - Invalid JSON response")
+        return grants
+      }
+
+      if (data && data.notices && Array.isArray(data.notices)) {
         for (const item of data.notices) {
           if (item.noticeNumber && item.title && this.matchesArquimeaTechMap(item.title, item.shortDescription || "")) {
             grants.push({
@@ -162,7 +176,7 @@ export class EUFundingFetcher {
       }
       console.log(`[v0] EU TED - Found ${grants.length} relevant notices`)
     } catch (error) {
-      console.error("[v0] EU TED - Error:", error)
+      console.log("[v0] EU TED - API not available or error occurred")
     }
 
     return grants

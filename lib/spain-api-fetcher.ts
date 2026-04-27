@@ -91,16 +91,11 @@ export class SpainApiFetcher {
         i === self.findIndex(x => x.id === t.id || x.title === t.title)
       )
 
-      if (uniqueTenders.length > 0) {
-        console.log(`[v0] Spain PLACSP - Total ARQUIMEA-relevant tenders: ${uniqueTenders.length}`)
-        return uniqueTenders
-      } else {
-        console.log("[v0] Spain PLACSP - No real tenders found, using verified fallback data")
-        return this.getArquimeaRelevantTenders()
-      }
+      console.log(`[v0] Spain PLACSP - Total ARQUIMEA-relevant tenders: ${uniqueTenders.length}`)
+      return uniqueTenders
     } catch (error) {
       console.error("[v0] Spain PLACSP - Error:", error)
-      return this.getArquimeaRelevantTenders()
+      return [] // Return empty - no simulated data
     }
   }
 
@@ -179,148 +174,5 @@ export class SpainApiFetcher {
     if (text.includes("aeronautico") || text.includes("aviacion")) return "Aeronautica"
     if (text.includes("i+d") || text.includes("innovacion")) return "I+D"
     return "Defensa"
-  }
-
-  // Verified real tenders from Spanish defense/space sector relevant for ARQUIMEA
-  private getArquimeaRelevantTenders(): SpainTender[] {
-    return [
-      // ESPACIO - Relevante para ARQUIMEA Space
-      {
-        id: "ESP-INTA-2026-001",
-        title: "Desarrollo de componentes electrónicos para misiones espaciales INTA",
-        organization: "Instituto Nacional de Técnica Aeroespacial (INTA)",
-        publishDate: "2026-04-15",
-        deadline: "2026-06-30",
-        amount: "€8,500,000",
-        category: "Espacio",
-        description: "Desarrollo y suministro de componentes electrónicos cualificados para espacio, incluyendo sensores de actitud, electrónica de potencia y sistemas de control para misiones científicas y de observación de la Tierra.",
-        expedient: "INTA-ESP-2026-001",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=INTA-2026-001",
-        source: "spain",
-      },
-      {
-        id: "ESP-CDTI-2026-002",
-        title: "Programa de I+D en tecnologías de pequeños satélites",
-        organization: "Centro para el Desarrollo Tecnológico Industrial (CDTI)",
-        publishDate: "2026-04-10",
-        deadline: "2026-07-15",
-        amount: "€12,000,000",
-        category: "Espacio",
-        description: "Convocatoria para proyectos de investigación y desarrollo en tecnologías de pequeños satélites, incluyendo propulsión eléctrica, sistemas de comunicación y cargas útiles miniaturizadas.",
-        expedient: "CDTI-SPACE-2026-002",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=CDTI-2026-002",
-        source: "spain",
-      },
-      // DEFENSA - Sistemas electrónicos y sensores
-      {
-        id: "ESP-DGAM-2026-003",
-        title: "Sistemas de navegación inercial para plataformas aéreas militares",
-        organization: "Dirección General de Armamento y Material (DGAM)",
-        publishDate: "2026-04-08",
-        deadline: "2026-06-20",
-        amount: "€15,200,000",
-        category: "Sensores",
-        description: "Adquisición de sistemas de navegación inercial de alta precisión basados en giroscopios de fibra óptica para aeronaves militares y sistemas no tripulados.",
-        expedient: "DGAM-NAV-2026-003",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=DGAM-2026-003",
-        source: "spain",
-      },
-      {
-        id: "ESP-EA-2026-004",
-        title: "Modernización de sistemas radar y guerra electrónica",
-        organization: "Ejército del Aire y del Espacio",
-        publishDate: "2026-04-05",
-        deadline: "2026-07-01",
-        amount: "€22,800,000",
-        category: "Sensores",
-        description: "Proyecto de modernización de sistemas de radar de vigilancia y sistemas de guerra electrónica para la defensa aérea española.",
-        expedient: "EA-RADAR-2026-004",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=EA-2026-004",
-        source: "spain",
-      },
-      // UAS/DRONES
-      {
-        id: "ESP-ET-2026-005",
-        title: "Adquisición de sistemas UAS tácticos clase II",
-        organization: "Ejército de Tierra - MALE",
-        publishDate: "2026-04-01",
-        deadline: "2026-06-15",
-        amount: "€18,500,000",
-        category: "UAS/Drones",
-        description: "Adquisición de sistemas aéreos no tripulados tácticos clase II para misiones de reconocimiento, vigilancia e inteligencia (ISR) incluyendo cargas útiles electroópticas.",
-        expedient: "ET-UAS-2026-005",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ET-2026-005",
-        source: "spain",
-      },
-      {
-        id: "ESP-ARMADA-2026-006",
-        title: "Sistemas counter-UAS para buques de la Armada",
-        organization: "Armada Española - AJEMA",
-        publishDate: "2026-03-28",
-        deadline: "2026-06-30",
-        amount: "€9,200,000",
-        category: "UAS/Drones",
-        description: "Suministro e integración de sistemas de detección y neutralización de amenazas UAS para fragatas F-100 y buques de proyección estratégica.",
-        expedient: "ARM-CUAS-2026-006",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ARM-2026-006",
-        source: "spain",
-      },
-      // NAVAL
-      {
-        id: "ESP-NAVANTIA-2026-007",
-        title: "Sistemas de propulsión eléctrica para submarinos S-80",
-        organization: "Navantia S.A.",
-        publishDate: "2026-03-25",
-        deadline: "2026-06-01",
-        amount: "€35,000,000",
-        category: "Naval",
-        description: "Desarrollo y suministro de sistemas de propulsión eléctrica y motores de alta eficiencia para el programa de submarinos S-80 Plus.",
-        expedient: "NAV-S80-2026-007",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=NAV-2026-007",
-        source: "spain",
-      },
-      // COMUNICACIONES
-      {
-        id: "ESP-CCN-2026-008",
-        title: "Sistemas de comunicaciones seguras cuánticas",
-        organization: "Centro Criptológico Nacional (CCN)",
-        publishDate: "2026-03-20",
-        deadline: "2026-05-30",
-        amount: "€6,800,000",
-        category: "Comunicaciones",
-        description: "Proyecto piloto de implementación de sistemas de distribución de claves cuánticas (QKD) para comunicaciones gubernamentales seguras.",
-        expedient: "CCN-QKD-2026-008",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=CCN-2026-008",
-        source: "spain",
-      },
-      // I+D AEROESPACIAL
-      {
-        id: "ESP-ISDEFE-2026-009",
-        title: "Programa de I+D en materiales avanzados para aeronáutica",
-        organization: "ISDEFE - Ingeniería de Sistemas para la Defensa",
-        publishDate: "2026-03-15",
-        deadline: "2026-05-20",
-        amount: "€7,500,000",
-        category: "I+D",
-        description: "Investigación y desarrollo de materiales compuestos avanzados y recubrimientos especiales para aplicaciones aeronáuticas y espaciales.",
-        expedient: "ISD-MAT-2026-009",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ISD-2026-009",
-        source: "spain",
-      },
-      // SENSORES BIOMÉDICOS
-      {
-        id: "ESP-MINISDEF-2026-010",
-        title: "Sistemas de monitorización biométrica para personal militar",
-        organization: "Ministerio de Defensa - Inspección General de Sanidad",
-        publishDate: "2026-03-10",
-        deadline: "2026-05-15",
-        amount: "€4,200,000",
-        category: "Sensores",
-        description: "Adquisición de sistemas wearables de monitorización biométrica y biosensores para seguimiento de salud del personal militar en operaciones.",
-        expedient: "DEF-BIO-2026-010",
-        sourceUrl: "https://contrataciondelsectorpublico.gob.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=DEF-2026-010",
-        source: "spain",
-      },
-    ]
   }
 }

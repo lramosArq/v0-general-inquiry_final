@@ -119,17 +119,45 @@ export default function GrantsSearchPage() {
       const userService = UserService.getInstance()
       const user = userService.getCurrentUser()
       if (user) {
+        console.log("[v0] Initializing user:", user.id, "with local alerts:", user.alerts?.length || 0)
+        
         // Load alerts from server for this user
         try {
           const response = await fetch(`/api/shared-data?type=alerts&userId=${user.id}`)
           const result = await response.json()
-          if (result.success && result.data && result.data.length > 0) {
-            user.alerts = result.data
-            // Update localStorage with server data
+          console.log("[v0] Server alerts response:", result)
+          
+          if (result.success && result.data) {
+            // Merge server alerts with local alerts (server takes priority)
+            const serverAlerts = result.data || []
+            const localAlerts = user.alerts || []
+            
+            // Create a map of server alerts by ID
+            const alertsById = new Map()
+            serverAlerts.forEach((a: any) => alertsById.set(a.id, a))
+            
+            // Add local alerts that aren't on server yet
+            localAlerts.forEach((a: any) => {
+              if (!alertsById.has(a.id)) {
+                alertsById.set(a.id, a)
+                // Sync this local alert to server
+                fetch("/api/shared-data", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ type: "alerts", userId: user.id, action: "add", data: a }),
+                }).catch(() => {})
+              }
+            })
+            
+            const mergedAlerts = Array.from(alertsById.values())
+            user.alerts = mergedAlerts
+            console.log("[v0] Merged alerts count:", mergedAlerts.length)
+            
+            // Update localStorage with merged data
             localStorage.setItem("arquimea_current_user", JSON.stringify(user))
           }
         } catch (e) {
-          console.log("[v0] Could not load alerts from server, using local data")
+          console.log("[v0] Could not load alerts from server, using local data:", e)
         }
         setCurrentUser({ ...user, alerts: user.alerts || [] })
       }

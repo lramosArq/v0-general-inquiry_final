@@ -318,9 +318,11 @@ export class UserService {
 
     // Sync to shared server
     try {
-      await sharedDataService.addAlert(userId, newAlert)
+      console.log("[v0] Syncing new alert to server for user:", userId)
+      const serverAlerts = await sharedDataService.addAlert(userId, newAlert)
+      console.log("[v0] Alert synced to server, total alerts:", serverAlerts?.length)
     } catch (e) {
-      console.log("[v0] Could not sync alert to server")
+      console.log("[v0] Could not sync alert to server:", e)
     }
 
     return { success: true, message: "Alerta creada exitosamente", alert: newAlert }

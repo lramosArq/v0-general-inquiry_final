@@ -87,41 +87,11 @@ export class SpainGrantsFetcher {
   }
 
   private async fetchFromBDNSAlternative(keyword?: string): Promise<SpainGrant[]> {
-    try {
-      // Try the infosubvenciones API
-      const response = await fetch(
-        "https://www.infosubvenciones.es/bdnstrans/GE/es/api/convocatorias",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-          },
-          body: JSON.stringify({
-            estadoConvocatoria: "Abierta",
-            numElementos: 50,
-            pagina: 1,
-            texto: keyword || "",
-          }),
-        }
-      )
-
-      if (!response.ok) {
-        console.log("[v0] Spain - Alternative API failed")
-        return []
-      }
-
-      const data = await response.json()
-      
-      if (data.convocatorias && Array.isArray(data.convocatorias)) {
-        return data.convocatorias.map((conv: any) => this.mapBDNSResult(conv)).filter(Boolean)
-      }
-
-      return []
-    } catch (error) {
-      console.error("[v0] Spain - Alternative API error:", error)
-      return []
-    }
+    // BDNS does not have a public JSON API - return empty array
+    // Users should check the official portal directly
+    console.log("[v0] Spain - BDNS does not provide a public JSON API")
+    console.log("[v0] Spain - Please visit https://www.pap.hacienda.gob.es/bdnstrans/GE/es/convocatorias for grants")
+    return []
   }
 
   private mapBDNSResult(conv: any): SpainGrant | null {

@@ -72,6 +72,12 @@ export class EUFundingFetcher {
       return await this.fetchFromAlternativeAPI(searchKeyword)
     }
 
+    const contentType = response.headers.get("content-type")
+    if (!contentType?.includes("application/json")) {
+      console.log("[v0] EU - API returned non-JSON response")
+      return await this.fetchFromAlternativeAPI(searchKeyword)
+    }
+
     const data = await response.json()
     
     if (!data.results || !Array.isArray(data.results)) {
@@ -97,6 +103,12 @@ export class EUFundingFetcher {
 
       if (!response.ok) {
         console.log("[v0] EU - Alternative API also failed, returning empty")
+        return []
+      }
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType?.includes("application/json")) {
+        console.log("[v0] EU - Alternative API returned non-JSON response")
         return []
       }
 

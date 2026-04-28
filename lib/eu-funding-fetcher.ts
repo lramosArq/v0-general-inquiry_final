@@ -128,14 +128,30 @@ export class EUFundingFetcher {
     const grants: EUGrant[] = []
 
     try {
-      // TED API v3
+      // TED Search API v3 - Correct endpoint is api.ted.europa.eu
+      // Uses POST with query in body as per official docs
       const response = await fetch(
-        `https://ted.europa.eu/api/v3.0/notices/search?q=${encodeURIComponent(searchTerm)}&pageNum=1&pageSize=20&scope=3&sortField=PD&sortOrder=desc`,
-        { headers: { "Accept": "application/json" } }
+        `https://api.ted.europa.eu/v3/notices/search`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            query: searchTerm,
+            pageSize: 20,
+            page: 1,
+            scope: "ACTIVE", // ACTIVE, ARCHIVED, or ALL
+            sortField: "PUBLICATION_DATE",
+            sortOrder: "DESC"
+          })
+        }
       )
 
       if (!response.ok) {
-        console.log(`[v0] EU TED - HTTP ${response.status}`)
+        const errorBody = await response.text()
+        console.log(`[v0] EU TED - HTTP ${response.status} and body: ${errorBody.substring(0, 200)}`)
         return grants
       }
 
@@ -154,29 +170,35 @@ export class EUFundingFetcher {
         return grants
       }
 
-      if (data && data.notices && Array.isArray(data.notices)) {
-        for (const item of data.notices) {
-          if (item.noticeNumber && item.title && this.matchesArquimeaTechMap(item.title, item.shortDescription || "")) {
+      // Handle TED API response structure
+      const notices = data.notices || data.results || data.content || []
+      if (Array.isArray(notices)) {
+        for (const item of notices) {
+          const noticeId = item.noticeNumber || item.id || item.noticeId
+          const title = item.title || item.titleText || ""
+          const description = item.shortDescription || item.description || item.summary || ""
+          
+          if (noticeId && title && this.matchesArquimeaTechMap(title, description)) {
             grants.push({
-              id: item.noticeNumber,
-              title: item.title,
-              organization: item.buyerName || "EU Institution",
-              publishDate: item.publicationDate || "",
-              deadline: item.deadline || "",
+              id: noticeId,
+              title: title,
+              organization: item.buyerName || item.organisationName || "EU Institution",
+              publishDate: item.publicationDate || item.publishedDate || "",
+              deadline: item.deadline || item.submissionDeadline || "",
               amount: item.estimatedValue ? `EUR ${item.estimatedValue}` : "",
-              category: item.cpvDescription || "EU Tender",
-              description: item.shortDescription || item.title,
-              expedient: item.noticeNumber,
-              sourceUrl: `https://ted.europa.eu/en/notice/-/detail/${item.noticeNumber}`,
+              category: item.cpvDescription || item.procedureType || "EU Tender",
+              description: description || title,
+              expedient: noticeId,
+              sourceUrl: `https://ted.europa.eu/en/notice/-/detail/${noticeId}`,
               source: "eu",
-              url: `https://ted.europa.eu/en/notice/-/detail/${item.noticeNumber}`,
+              url: `https://ted.europa.eu/en/notice/-/detail/${noticeId}`,
             })
           }
         }
       }
       console.log(`[v0] EU TED - Found ${grants.length} relevant notices`)
     } catch (error) {
-      console.log("[v0] EU TED - API not available or error occurred")
+      console.log("[v0] EU TED - API error:", error instanceof Error ? error.message : "Unknown error")
     }
 
     return grants

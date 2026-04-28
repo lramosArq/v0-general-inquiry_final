@@ -50,31 +50,35 @@ export class EUFundingFetcher {
   }
 
   async fetchAllGrants(keyword?: string): Promise<EUGrant[]> {
-    console.log("[v0] EU - Attempting to fetch real grants from EU APIs...")
+    console.log("[v0] EU - Fetching ALL grants from EU sources (no pre-filtering)...")
 
     const allGrants: EUGrant[] = []
 
-    // Try TED API first (primary source)
-    const tedGrants = await this.fetchFromTED(keyword)
-    if (tedGrants.length > 0) {
-      allGrants.push(...tedGrants)
-    }
-
-    // Try EU Funding Portal RSS feed (recommended by user - has many matching opportunities)
+    // PRIMARY SOURCE: EU Funding Portal RSS feed - include ALL tenders
+    // This feed contains all call updates - we include everything so users can filter in the UI
     const rssGrants = await this.fetchFromRSSFeed()
     if (rssGrants.length > 0) {
       allGrants.push(...rssGrants)
-      console.log(`[v0] EU RSS Feed - Found ${rssGrants.length} grants`)
+      console.log(`[v0] EU RSS Feed - Loaded ${rssGrants.length} tenders (ALL included)`)
     }
 
-    // Also try SEDIA API as backup
-    const searchTerms = ["defence", "space", "drone"]
+    // SECONDARY: TED API for additional procurement notices
+    const tedGrants = await this.fetchFromTED(keyword)
+    if (tedGrants.length > 0) {
+      allGrants.push(...tedGrants)
+      console.log(`[v0] EU TED - Loaded ${tedGrants.length} notices`)
+    }
+
+    // TERTIARY: SEDIA API for broader coverage
+    const searchTerms = ["defence", "space", "digital", "horizon", "research", "innovation"]
     for (const term of searchTerms) {
       try {
         const termGrants = await this.fetchFromSEDIA(term)
         allGrants.push(...termGrants)
-        console.log(`[v0] EU SEDIA - "${term}": ${termGrants.length} relevant`)
-      } catch (error) {
+        if (termGrants.length > 0) {
+          console.log(`[v0] EU SEDIA - "${term}": ${termGrants.length} loaded`)
+        }
+      } catch {
         // Silent fail for SEDIA
       }
     }
@@ -84,18 +88,11 @@ export class EUFundingFetcher {
       i === self.findIndex(x => x.id === g.id)
     )
 
-    // ADDITIVE filtering: Include grants that match ANY keyword (OR logic, not exclusive AND)
-    // This enriches and expands the search range as requested by user
-    // Grants don't need to match ALL filters - matching any is enough
-    const relevantGrants = uniqueGrants.filter(g => 
-      this.matchesArquimeaTechMap(g.title, g.description)
-    )
-
-    // If we have very few results, include all unique grants (be more permissive)
-    const finalGrants = relevantGrants.length < 5 ? uniqueGrants : relevantGrants
-
-    console.log(`[v0] EU - Total REAL grants found: ${finalGrants.length} (from ${uniqueGrants.length} unique)`)
-    return finalGrants
+    // NO PRE-FILTERING: Return ALL unique grants
+    // The platform UI will handle filtering based on user preferences
+    // This ensures the platform has the complete feed available
+    console.log(`[v0] EU - Total grants loaded: ${uniqueGrants.length} (ALL available for user filtering)`)
+    return uniqueGrants
   }
 
   /**
@@ -242,20 +239,23 @@ export class EUFundingFetcher {
   /**
    * Fetch from EU Funding Portal RSS Feed
    * https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/callupdates-rss.xml
-   * This feed contains the latest call updates and is a reliable source
+   * This feed contains ALL call updates - we load everything for the platform
+   * Users can then filter using the predefined UI filters
    */
   private async fetchFromRSSFeed(): Promise<EUGrant[]> {
     const grants: EUGrant[] = []
 
     try {
+      // Primary RSS feed with all call updates
       const rssUrl = "https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/callupdates-rss.xml"
       
-      console.log("[v0] EU RSS - Fetching from EU Funding Portal RSS feed...")
+      console.log("[v0] EU RSS - Fetching COMPLETE feed from EU Funding Portal...")
       
       const response = await fetch(rssUrl, {
         headers: {
-          "Accept": "application/xml, text/xml, application/rss+xml",
-          "User-Agent": "Mozilla/5.0 (compatible; GrantsFetcher/1.0)",
+          "Accept": "application/xml, text/xml, application/rss+xml, */*",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Cache-Control": "no-cache",
         },
       })
 
@@ -270,16 +270,19 @@ export class EUFundingFetcher {
         return grants
       }
 
-      // Parse RSS XML manually (no external parser needed)
+      // Parse ALL RSS items - no filtering at this stage
       const items = this.parseRSSItems(xmlText)
-      console.log(`[v0] EU RSS - Parsed ${items.length} items from feed`)
+      console.log(`[v0] EU RSS - Found ${items.length} total items in feed`)
 
+      // Convert ALL items to grants - filtering will happen in the UI
       for (const item of items) {
         const grant = this.parseRSSItem(item)
         if (grant) {
           grants.push(grant)
         }
       }
+
+      console.log(`[v0] EU RSS - Successfully parsed ${grants.length} grants from feed`)
 
     } catch (error) {
       console.log(`[v0] EU RSS - Error:`, error instanceof Error ? error.message : error)
@@ -321,34 +324,79 @@ export class EUFundingFetcher {
 
   /**
    * Parse a single RSS item into EUGrant format
+   * Extracts all available information without filtering
    */
   private parseRSSItem(item: {title: string, link: string, description: string, pubDate: string, guid: string}): EUGrant | null {
     try {
-      if (!item.title || !item.link) {
+      if (!item.title) {
         return null
       }
 
-      // Extract call ID from the link or guid
-      const idMatch = item.link.match(/\/([A-Z0-9-]+)(?:\?|$)/) || 
-                      item.guid.match(/([A-Z0-9-]+)$/)
-      const id = idMatch?.[1] || item.guid || `RSS-${Date.now()}`
+      // Extract call ID from the link or guid - more flexible matching
+      const idMatch = item.link?.match(/\/([A-Z0-9-_]+)(?:\?|$)/i) || 
+                      item.link?.match(/callIdentifier=([^&]+)/) ||
+                      item.guid?.match(/([A-Z0-9-_]+)$/i)
+      const id = idMatch?.[1] || item.guid || `RSS-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
       // Parse dates from the item
-      const publishDate = item.pubDate ? this.formatDate(item.pubDate) : ""
+      const publishDate = item.pubDate ? this.formatDate(item.pubDate) : new Date().toISOString().split("T")[0]
       
-      // Try to extract deadline from description if present
-      const deadlineMatch = item.description.match(/deadline[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{2}[\/\-]\d{2})/i)
-      const deadline = deadlineMatch ? this.formatDate(deadlineMatch[1]) : ""
+      // Try to extract deadline from description - multiple patterns
+      const deadlinePatterns = [
+        /deadline[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+        /closes?[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+        /(\d{4}[\/\-]\d{2}[\/\-]\d{2})/,
+        /(\d{1,2}\s+\w+\s+\d{4})/i,
+      ]
+      let deadline = ""
+      for (const pattern of deadlinePatterns) {
+        const match = item.description?.match(pattern)
+        if (match) {
+          deadline = this.formatDate(match[1])
+          break
+        }
+      }
 
       // Clean HTML from description
-      const cleanDescription = item.description
+      const cleanDescription = (item.description || item.title)
         .replace(/<[^>]*>/g, " ")
         .replace(/&nbsp;/g, " ")
         .replace(/&amp;/g, "&")
         .replace(/&lt;/g, "<")
         .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#\d+;/g, "")
         .replace(/\s+/g, " ")
         .trim()
+
+      // Try to extract budget/amount from description
+      const budgetMatch = cleanDescription.match(/(?:budget|amount|funding)[:\s]*(?:EUR|€)?\s*([\d.,]+\s*(?:million|M|billion|B)?)/i)
+      const amount = budgetMatch ? `EUR ${budgetMatch[1]}` : ""
+
+      // Extract programme from title or description
+      const programPatterns = [
+        /(Horizon\s*(?:Europe|2020)?)/i,
+        /(EDF|European\s*Defence\s*Fund)/i,
+        /(Digital\s*Europe)/i,
+        /(LIFE)/i,
+        /(Erasmus\+?)/i,
+        /(CEF|Connecting\s*Europe)/i,
+        /(EU4Health)/i,
+        /(EUSPA)/i,
+        /(EDIRPA)/i,
+        /(Creative\s*Europe)/i,
+      ]
+      let program = "EU Funding & Tenders Portal"
+      for (const pattern of programPatterns) {
+        const match = (item.title + " " + cleanDescription).match(pattern)
+        if (match) {
+          program = match[1]
+          break
+        }
+      }
+
+      // Determine URL - use link if available, otherwise construct from ID
+      const url = item.link || `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${id.toLowerCase()}`
 
       return {
         id: `EU-RSS-${id}`,
@@ -356,15 +404,15 @@ export class EUFundingFetcher {
         organization: "European Commission",
         publishDate,
         deadline,
-        amount: "",
+        amount,
         category: this.categorizeGrant(item.title, cleanDescription),
         description: cleanDescription.substring(0, 500),
         expedient: id,
-        sourceUrl: item.link,
+        sourceUrl: url,
         source: "eu",
-        url: item.link,
-        program: "EU Funding & Tenders Portal",
-        status: "Open",
+        url,
+        program,
+        status: deadline && new Date(deadline) > new Date() ? "Open" : "Open", // Assume open since it's in RSS feed
       }
     } catch {
       return null

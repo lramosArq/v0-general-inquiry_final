@@ -84,9 +84,15 @@ export class EUFundingFetcher {
     }
 
     // Remove duplicates by ID (keep first occurrence)
+    // With improved ID generation, we should have far fewer collisions
     const uniqueGrants = allGrants.filter((g, i, self) => 
       i === self.findIndex(x => x.id === g.id)
     )
+
+    const duplicatesRemoved = allGrants.length - uniqueGrants.length
+    if (duplicatesRemoved > 0) {
+      console.log(`[v0] EU - Removed ${duplicatesRemoved} duplicate entries`)
+    }
 
     // NO PRE-FILTERING: Return ALL unique grants
     // The platform UI will handle filtering based on user preferences
@@ -275,8 +281,9 @@ export class EUFundingFetcher {
       console.log(`[v0] EU RSS - Found ${items.length} total items in feed`)
 
       // Convert ALL items to grants - filtering will happen in the UI
-      for (const item of items) {
-        const grant = this.parseRSSItem(item)
+      // Pass index to ensure unique IDs even if other fields are similar
+      for (let i = 0; i < items.length; i++) {
+        const grant = this.parseRSSItem(items[i], i)
         if (grant) {
           grants.push(grant)
         }
@@ -325,18 +332,38 @@ export class EUFundingFetcher {
   /**
    * Parse a single RSS item into EUGrant format
    * Extracts all available information without filtering
+   * IMPORTANT: Generate unique IDs to avoid losing items due to duplicates
    */
-  private parseRSSItem(item: {title: string, link: string, description: string, pubDate: string, guid: string}): EUGrant | null {
+  private parseRSSItem(item: {title: string, link: string, description: string, pubDate: string, guid: string}, index: number): EUGrant | null {
     try {
       if (!item.title) {
         return null
       }
 
-      // Extract call ID from the link or guid - more flexible matching
-      const idMatch = item.link?.match(/\/([A-Z0-9-_]+)(?:\?|$)/i) || 
-                      item.link?.match(/callIdentifier=([^&]+)/) ||
-                      item.guid?.match(/([A-Z0-9-_]+)$/i)
-      const id = idMatch?.[1] || item.guid || `RSS-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      // Extract call ID from multiple sources for better identification
+      // Priority: guid > link path > link param > generated
+      let callId = ""
+      
+      // Try guid first (most reliable)
+      if (item.guid) {
+        callId = item.guid.replace(/^.*\//, "").replace(/[^a-zA-Z0-9-_]/g, "")
+      }
+      
+      // Try link if guid didn't work
+      if (!callId && item.link) {
+        const linkMatch = item.link.match(/\/([A-Z0-9-_]+)(?:\?|#|$)/i) || 
+                         item.link.match(/callIdentifier=([^&]+)/) ||
+                         item.link.match(/topic[\/=]([^\/&?]+)/i)
+        if (linkMatch) {
+          callId = linkMatch[1]
+        }
+      }
+      
+      // Generate unique ID combining multiple factors to avoid collisions
+      // Use title hash + pubDate + index to ensure uniqueness
+      const titleHash = item.title.slice(0, 30).replace(/[^a-zA-Z0-9]/g, "").toLowerCase()
+      const dateHash = (item.pubDate || "").replace(/[^0-9]/g, "").slice(0, 8)
+      const uniqueId = callId || `${titleHash}-${dateHash}-${index}`
 
       // Parse dates from the item
       const publishDate = item.pubDate ? this.formatDate(item.pubDate) : new Date().toISOString().split("T")[0]
@@ -396,10 +423,10 @@ export class EUFundingFetcher {
       }
 
       // Determine URL - use link if available, otherwise construct from ID
-      const url = item.link || `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${id.toLowerCase()}`
+      const url = item.link || `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${callId.toLowerCase() || uniqueId}`
 
       return {
-        id: `EU-RSS-${id}`,
+        id: `EU-RSS-${uniqueId}`,
         title: item.title,
         organization: "European Commission",
         publishDate,
@@ -407,7 +434,7 @@ export class EUFundingFetcher {
         amount,
         category: this.categorizeGrant(item.title, cleanDescription),
         description: cleanDescription.substring(0, 500),
-        expedient: id,
+        expedient: callId || uniqueId,
         sourceUrl: url,
         source: "eu",
         url,

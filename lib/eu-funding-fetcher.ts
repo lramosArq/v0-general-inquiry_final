@@ -114,17 +114,20 @@ export class EUFundingFetcher {
 
       // CORRECT request body format for TED API v3
       // NOTE: Uses "limit" NOT "pageSize" - pageSize is invalid!
+      // Field names must be from TED's supported values list
       const requestBody = {
         query: expertQuery,
         fields: [
           "publication-number",
           "notice-title",
-          "buyer-name",
+          "announcement-title",
+          "organisation-name-buyer",
           "publication-date",
-          "deadline-receipt-tenders",
+          "deadline",
           "notice-type",
-          "cpv-code",
-          "place-of-performance"
+          "classification-cpv",
+          "description-lot",
+          "title-lot"
         ],
         page: 1,
         limit: 50,  // NOT pageSize - that's the wrong field name!
@@ -188,16 +191,17 @@ export class EUFundingFetcher {
   private parseTEDNotice(notice: Record<string, unknown>): EUGrant | null {
     try {
       const id = (notice["publication-number"] || notice.id || "") as string
-      const title = (notice["notice-title"] || notice.title || "") as string
+      const title = (notice["notice-title"] || notice["announcement-title"] || notice["title-lot"] || notice.title || "") as string
       
       if (!id || !title) {
         return null
       }
 
-      const organization = (notice["buyer-name"] || "European Commission") as string
+      const organization = (notice["organisation-name-buyer"] || "European Commission") as string
       const publishDate = this.formatDate((notice["publication-date"] || "") as string)
-      const deadline = this.formatDate((notice["deadline-receipt-tenders"] || "") as string)
+      const deadline = this.formatDate((notice["deadline"] || "") as string)
       const noticeType = (notice["notice-type"] || "") as string
+      const description = (notice["description-lot"] || title) as string
 
       // Build TED portal URL
       const tedUrl = `https://ted.europa.eu/en/notice/-/detail/${id}`
@@ -209,8 +213,8 @@ export class EUFundingFetcher {
         publishDate,
         deadline,
         amount: "",
-        category: this.categorizeGrant(title, noticeType),
-        description: title, // TED often doesn't return full description in search
+        category: this.categorizeGrant(title, description),
+        description: description.substring(0, 500)
         expedient: id,
         sourceUrl: tedUrl,
         source: "eu",

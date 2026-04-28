@@ -479,8 +479,13 @@ export class EUFundingFetcher {
         }
       }
 
-      const expedient = callIdentifier || topicIdentifier || `RSS-${index}`
-      const uniqueId = `${expedient}-${index}`
+      // Generate truly unique expedient and ID
+      // Use index to guarantee uniqueness even if other fields are empty
+      const expedient = callIdentifier || topicIdentifier || `RSS-ITEM-${index}`
+      
+      // Create unique ID using multiple factors to avoid ANY collisions
+      const titleSlug = item.title.slice(0, 20).replace(/[^a-zA-Z0-9]/g, "").toLowerCase()
+      const uniqueId = `${expedient}-${titleSlug}-${index}`
 
       // Parse dates
       const publishDate = item.pubDate ? this.formatDate(item.pubDate) : new Date().toISOString().split("T")[0]
@@ -667,42 +672,51 @@ export class EUFundingFetcher {
   }
 
   /**
-   * Deduplicate grants using multiple criteria
+   * Deduplicate grants - use UNIQUE ID as primary key
+   * Only deduplicate if we have matching callIdentifier AND topicIdentifier
+   * This preserves all RSS items that are genuinely different
    */
   private deduplicateGrants(grants: EUGrant[]): EUGrant[] {
-    const seen = new Map<string, EUGrant>()
+    const seenById = new Map<string, EUGrant>()
+    const seenByCall = new Map<string, EUGrant>()
     
     for (const grant of grants) {
-      // Use multiple keys for deduplication
-      const keys = [
-        grant.callIdentifier,
-        grant.topicIdentifier,
-        grant.expedient,
-        grant.id,
-      ].filter(Boolean)
-      
-      let isDuplicate = false
-      for (const key of keys) {
-        if (key && seen.has(key)) {
-          // Keep the one with more complete data
-          const existing = seen.get(key)!
-          if (grant.description.length > existing.description.length || 
-              (grant.deadline && !existing.deadline) ||
-              (grant.amount && !existing.amount)) {
-            // Replace with more complete version
-            seen.set(key, grant)
-          }
-          isDuplicate = true
-          break
-        }
+      // Always use the unique ID - this preserves all items
+      if (seenById.has(grant.id)) {
+        // Skip exact duplicates by ID
+        continue
       }
       
-      if (!isDuplicate && keys[0]) {
-        seen.set(keys[0], grant)
+      // Check if we have a more specific duplicate by callIdentifier + topicIdentifier
+      // Only consider duplicate if BOTH match and are non-empty
+      const callKey = grant.callIdentifier && grant.topicIdentifier 
+        ? `${grant.callIdentifier}::${grant.topicIdentifier}`
+        : null
+      
+      if (callKey && seenByCall.has(callKey)) {
+        // We have a duplicate - keep the one with more complete data
+        const existing = seenByCall.get(callKey)!
+        if (grant.description.length > existing.description.length || 
+            (grant.deadline && !existing.deadline) ||
+            (grant.amount && !existing.amount)) {
+          // Replace with more complete version
+          seenById.delete(existing.id)
+          seenById.set(grant.id, grant)
+          seenByCall.set(callKey, grant)
+        }
+        // Skip this grant - it's a duplicate
+        continue
+      }
+      
+      // Add new grant
+      seenById.set(grant.id, grant)
+      if (callKey) {
+        seenByCall.set(callKey, grant)
       }
     }
     
-    return Array.from(seen.values())
+    console.log(`[v0] EU Dedup - Kept ${seenById.size} unique grants from ${grants.length} total`)
+    return Array.from(seenById.values())
   }
 
   /**

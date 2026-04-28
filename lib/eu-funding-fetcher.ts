@@ -1,9 +1,14 @@
 /**
- * EU Funding Fetcher - Multi-source Integration
+ * EU Funding Fetcher - TED API v3 Integration
+ * Official Tenders Electronic Daily (TED) Search API
+ * https://api.ted.europa.eu/v3/notices/search
  * 
- * Sources:
- * 1. TED API v3 (api.ted.europa.eu) - Public procurement notices
- * 2. SEDIA API (api.tech.ec.europa.eu) - Funding & Tenders opportunities
+ * Uses correct TED API v3 request body format:
+ * - query: Expert search query
+ * - fields: Fields to return
+ * - page: Page number (1-based)
+ * - limit: Max results per page
+ * - scope: ACTIVE or ALL
  * 
  * Filtered for ARQUIMEA tech map: defence, space, sensors, quantum, etc.
  */
@@ -49,26 +54,21 @@ export class EUFundingFetcher {
 
     const allGrants: EUGrant[] = []
 
-    // 1. Try TED API v3 (procurement notices)
-    try {
-      const tedGrants = await this.fetchFromTEDv3(keyword)
+    // Try TED API first (primary source)
+    const tedGrants = await this.fetchFromTED(keyword)
+    if (tedGrants.length > 0) {
       allGrants.push(...tedGrants)
-    } catch (error) {
-      console.log("[v0] EU TED - Error or not available")
     }
 
-    // 2. Try SEDIA API (funding opportunities)
-    const searchTerms = keyword && keyword !== "all" 
-      ? [keyword] 
-      : ["defence", "space", "drone", "sensor", "quantum"]
-    
+    // Also try SEDIA API as backup
+    const searchTerms = ["defence", "space", "drone"]
     for (const term of searchTerms) {
       try {
-        const sedialGrants = await this.fetchFromSEDIA(term)
-        allGrants.push(...sedialGrants)
-        console.log(`[v0] EU SEDIA - "${term}": ${sedialGrants.length} relevant`)
+        const termGrants = await this.fetchFromSEDIA(term)
+        allGrants.push(...termGrants)
+        console.log(`[v0] EU SEDIA - "${term}": ${termGrants.length} relevant`)
       } catch (error) {
-        // Silent fail for individual terms
+        // Silent fail for SEDIA
       }
     }
 
@@ -77,7 +77,7 @@ export class EUFundingFetcher {
       i === self.findIndex(x => x.id === g.id)
     )
 
-    // Filter by ARQUIMEA tech map
+    // Filter by ARQUIMEA tech map if we got generic results
     const relevantGrants = uniqueGrants.filter(g => 
       this.matchesArquimeaTechMap(g.title, g.description)
     )
@@ -87,59 +87,72 @@ export class EUFundingFetcher {
   }
 
   /**
-   * Fetch from TED API v3 - EU Procurement Notices
-   * Documentation: https://docs.ted.europa.eu/api/latest/search.html
-   * Endpoint: POST https://api.ted.europa.eu/v3/notices/search
-   * 
-   * Request body fields (per official docs):
+   * Fetch from TED API v3 with CORRECT request body format
+   * Based on official TED API documentation:
    * - query: Expert search query string
-   * - fields: Array of fields to return
-   * - page: Page number (starts at 1)
-   * - limit: Number of results per page
-   * - scope: ACTIVE, ARCHIVED, or ALL
+   * - fields: Array of field names to return
+   * - page: Result page number (1-based)
+   * - limit: Max results per page (not pageSize!)
+   * - scope: "ACTIVE" or "ALL"
    */
-  private async fetchFromTEDv3(keyword?: string): Promise<EUGrant[]> {
+  private async fetchFromTED(keyword?: string): Promise<EUGrant[]> {
     const grants: EUGrant[] = []
-    const searchTerm = keyword && keyword !== "all" ? keyword : "defence"
 
     try {
-      // TED Expert Query format - search in title and description
-      const expertQuery = `TD=[CN,PIN,CAN] AND FT~"${searchTerm}"`
+      // TED API v3 endpoint
+      const apiUrl = "https://api.ted.europa.eu/v3/notices/search"
+
+      // Build expert query for defence/space/technology
+      const searchTerms = keyword && keyword !== "all" 
+        ? [keyword]
+        : ["defence", "space", "security", "technology"]
       
+      // TED expert query format
+      const expertQuery = searchTerms.map(term => 
+        `(title CONTAINS "${term}" OR description CONTAINS "${term}")`
+      ).join(" OR ")
+
+      // CORRECT request body format for TED API v3
+      // NOTE: Uses "limit" NOT "pageSize" - pageSize is invalid!
       const requestBody = {
         query: expertQuery,
         fields: [
           "publication-number",
-          "title",
+          "notice-title",
           "buyer-name",
           "publication-date",
-          "deadline-receipt-request",
-          "cpv-description",
-          "short-description",
-          "estimated-value"
+          "deadline-receipt-tenders",
+          "notice-type",
+          "cpv-code",
+          "place-of-performance"
         ],
         page: 1,
-        limit: 30,
-        scope: "ACTIVE"
+        limit: 50,  // NOT pageSize - that's the wrong field name!
+        scope: "ACTIVE",
+        paginationMode: "PAGE_NUMBER",
+        onlyLatestVersions: true,
       }
 
-      const response = await fetch("https://api.ted.europa.eu/v3/notices/search", {
+      console.log("[v0] EU TED - Fetching with correct API format...")
+
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          "Accept": "application/json",
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
-        const errorBody = await response.text()
-        console.log(`[v0] EU TED v3 - HTTP ${response.status}: ${errorBody.substring(0, 200)}`)
+        const errorBody = await response.text().catch(() => "")
+        console.log(`[v0] EU TED - HTTP ${response.status} and body: ${errorBody.slice(0, 200)}`)
         return grants
       }
 
       const text = await response.text()
       if (!text || text.trim().length === 0) {
+        console.log("[v0] EU TED - Empty response")
         return grants
       }
 
@@ -147,61 +160,63 @@ export class EUFundingFetcher {
       try {
         data = JSON.parse(text)
       } catch {
-        console.log("[v0] EU TED v3 - Invalid JSON response")
+        console.log("[v0] EU TED - Invalid JSON response")
         return grants
       }
 
-      // Parse TED response - structure varies
-      const notices = data.notices || data.results || data.content || []
-      if (Array.isArray(notices)) {
-        for (const item of notices) {
-          const grant = this.parseTEDNotice(item)
-          if (grant && this.matchesArquimeaTechMap(grant.title, grant.description)) {
-            grants.push(grant)
-          }
+      // Parse TED response
+      const notices = data.notices || data.results || []
+      console.log(`[v0] EU TED - Received ${notices.length} notices`)
+
+      for (const notice of notices) {
+        const grant = this.parseTEDNotice(notice)
+        if (grant) {
+          grants.push(grant)
         }
       }
 
-      console.log(`[v0] EU TED v3 - Found ${grants.length} relevant notices`)
     } catch (error) {
-      console.log("[v0] EU TED v3 - API error:", error instanceof Error ? error.message : "Unknown")
+      console.log(`[v0] EU TED - Error:`, error instanceof Error ? error.message : error)
     }
 
     return grants
   }
 
   /**
-   * Parse a TED API notice into EUGrant format
+   * Parse a TED API notice into our EUGrant format
    */
-  private parseTEDNotice(item: Record<string, unknown>): EUGrant | null {
+  private parseTEDNotice(notice: Record<string, unknown>): EUGrant | null {
     try {
-      const id = (item["publication-number"] || item.publicationNumber || item.id || "") as string
-      const title = (item.title || item.titleText || "") as string
+      const id = (notice["publication-number"] || notice.id || "") as string
+      const title = (notice["notice-title"] || notice.title || "") as string
       
-      if (!id || !title) return null
+      if (!id || !title) {
+        return null
+      }
 
-      const description = (item["short-description"] || item.shortDescription || title) as string
-      const deadline = (item["deadline-receipt-request"] || item.deadline || "") as string
-      const publishDate = (item["publication-date"] || item.publicationDate || "") as string
-      const buyerName = (item["buyer-name"] || item.buyerName || "EU Institution") as string
-      const cpv = (item["cpv-description"] || item.cpvDescription || "EU Tender") as string
-      const value = item["estimated-value"] || item.estimatedValue
+      const organization = (notice["buyer-name"] || "European Commission") as string
+      const publishDate = this.formatDate((notice["publication-date"] || "") as string)
+      const deadline = this.formatDate((notice["deadline-receipt-tenders"] || "") as string)
+      const noticeType = (notice["notice-type"] || "") as string
+
+      // Build TED portal URL
+      const tedUrl = `https://ted.europa.eu/en/notice/-/detail/${id}`
 
       return {
-        id,
+        id: `TED-${id}`,
         title,
-        organization: buyerName,
-        publishDate: this.formatDate(publishDate),
-        deadline: this.formatDate(deadline),
-        amount: value ? `EUR ${value}` : "",
-        category: cpv,
-        description: description.substring(0, 500),
+        organization,
+        publishDate,
+        deadline,
+        amount: "",
+        category: this.categorizeGrant(title, noticeType),
+        description: title, // TED often doesn't return full description in search
         expedient: id,
-        sourceUrl: `https://ted.europa.eu/en/notice/-/detail/${id}`,
+        sourceUrl: tedUrl,
         source: "eu",
-        url: `https://ted.europa.eu/en/notice/-/detail/${id}`,
-        program: "TED Procurement",
-        status: "Open"
+        url: tedUrl,
+        program: "TED Tenders",
+        status: "Open",
       }
     } catch {
       return null
@@ -209,8 +224,7 @@ export class EUFundingFetcher {
   }
 
   /**
-   * Fetch from SEDIA API - EU Funding & Tenders Portal
-   * Endpoint: https://api.tech.ec.europa.eu/search-api/prod/rest/search
+   * Fetch from SEDIA API as backup source
    */
   private async fetchFromSEDIA(keyword: string): Promise<EUGrant[]> {
     const grants: EUGrant[] = []
@@ -218,19 +232,17 @@ export class EUFundingFetcher {
     try {
       const apiUrl = "https://api.tech.ec.europa.eu/search-api/prod/rest/search"
       
-      // SEDIA API query parameters
       const queryParams = new URLSearchParams({
         apiKey: "SEDIA",
         text: keyword,
-        pageSize: "30",
+        pageSize: "30",  // SEDIA uses pageSize (different from TED API!)
         pageNumber: "1",
       })
 
-      // Filter for open/forthcoming funding opportunities
       const requestBody = {
         bool: {
           must: [
-            { term: { type: "1" } }, // Type 1 = Topics/Calls
+            { term: { type: "1" } }, // Topics/Calls
             { term: { programmePeriod: "2021 - 2027" } },
           ],
           should: [
@@ -266,7 +278,6 @@ export class EUFundingFetcher {
         return grants
       }
 
-      // Parse SEDIA response
       if (data && data.results && Array.isArray(data.results)) {
         for (const item of data.results) {
           const grant = this.parseSEDIAResult(item, keyword)
@@ -276,31 +287,36 @@ export class EUFundingFetcher {
         }
       }
 
-    } catch (error) {
-      // Silent fail
+    } catch {
+      // Silent fail for SEDIA
     }
 
     return grants
   }
 
   /**
-   * Parse a SEDIA API result into EUGrant format
+   * Parse a SEDIA API result into our EUGrant format
    */
   private parseSEDIAResult(item: Record<string, unknown>, source: string): EUGrant | null {
     try {
       const id = (item.identifier || item.ccm2Id || item.id || "") as string
       const title = (item.title || "") as string
       
-      if (!id || !title) return null
+      if (!id || !title) {
+        return null
+      }
 
-      const description = (item.description || item.callTitle || title) as string
+      const description = (item.description || item.callTitle || item.keywords || title) as string
       const deadlineRaw = item.deadlineDate || item.deadline || item.closingDate
       const deadline = deadlineRaw ? this.formatDate(deadlineRaw as string) : ""
       const publishRaw = item.publicationDate || item.startDate || item.openingDate
       const publishDate = publishRaw ? this.formatDate(publishRaw as string) : ""
-      const budget = item.budget || ""
-      const amount = typeof budget === "string" && budget ? budget : (budget ? `EUR ${budget}` : "")
-      
+
+      const budget = item.budget || item.budgetOverviewUrl || ""
+      const amount = typeof budget === "string" && budget.includes("EUR") 
+        ? budget 
+        : (budget ? `EUR ${budget}` : "")
+
       const statusCode = item.status as string
       let status = "Unknown"
       if (statusCode === "31094501") status = "Open"
@@ -339,14 +355,17 @@ export class EUFundingFetcher {
     try {
       if (!dateStr) return ""
       
+      // Handle timestamp format
       if (typeof dateStr === "number" || /^\d{13}$/.test(dateStr)) {
         return new Date(Number(dateStr)).toISOString().split("T")[0]
       }
       
+      // Handle ISO format
       if (dateStr.includes("T")) {
         return dateStr.split("T")[0]
       }
       
+      // Try parsing as date
       const date = new Date(dateStr)
       if (!isNaN(date.getTime())) {
         return date.toISOString().split("T")[0]

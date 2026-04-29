@@ -131,158 +131,86 @@ export class EUFundingFetcher {
 
   /**
    * Parse RSS item into EUGrant with full detail extraction
-   * Extracts OPPORTUNITY NUMBER (callIdentifier) as the primary identifier
+   * Extracts structured data from HTML description (Identifier, Pillar, Deadline, Budget)
    */
   private parseRSSItem(item: {title: string, link: string, description: string, pubDate: string, guid: string}, index: number): EUGrant | null {
     try {
       if (!item.title) return null
 
-      // Extract identifiers - prioritize OPPORTUNITY NUMBER patterns
-      let callIdentifier = ""
-      let topicIdentifier = ""
+      // Extract structured fields from HTML description
+      const structuredData = this.extractStructuredFields(item.description)
       
-      // Combined text for searching
-      const searchText = `${item.title} ${item.description} ${item.link} ${item.guid}`.toUpperCase()
+      // Get call identifier from structured data or patterns
+      let callIdentifier = structuredData.identifier || ""
+      const topicIdentifier = ""
       
-      // PRIORITY 1: Extract EU programme call identifiers from ANY field
-      // Standard EU patterns: HORIZON-xxx, EDF-xxx, DIGITAL-xxx, CEF-xxx, etc.
-      const programPatterns = [
-        // Main programme patterns
-        /(HORIZON[-_]?[A-Z0-9]+[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(EDF[-_]?20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(DIGITAL[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(CEF[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(LIFE[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(ERASMUS[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(CREA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(EUSPA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(EDIRPA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(AGRIP[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(AMIF[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(CERV[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(EU4H[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(ISF[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(SMP[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(EMFAF[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        /(JUST[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-      ]
-      
-      for (const pattern of programPatterns) {
-        const match = searchText.match(pattern)
-        if (match) {
-          callIdentifier = match[1].replace(/_/g, "-")
-          break
+      // If no identifier from structured data, try patterns
+      if (!callIdentifier) {
+        const searchText = `${item.title} ${item.link} ${item.guid}`.toUpperCase()
+        const programPatterns = [
+          /(HORIZON[-_]?[A-Z0-9]+[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+          /(EDF[-_]?20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+          /(DIGITAL[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+          /(CEF[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+          /(LIFE[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+          /(ERASMUS[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+          /(CREA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+          /(EUSPA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        ]
+        
+        for (const pattern of programPatterns) {
+          const match = searchText.match(pattern)
+          if (match) {
+            callIdentifier = match[1].replace(/_/g, "-")
+            break
+          }
         }
       }
       
-      // PRIORITY 2: Try link patterns
+      // Try link patterns as fallback
       if (!callIdentifier && item.link) {
-        // Pattern: /topic-details/IDENTIFIER
-        const topicMatch = item.link.match(/topic-details\/([A-Za-z0-9-_]+)/i)
-        if (topicMatch) {
-          topicIdentifier = topicMatch[1].toUpperCase()
-          if (!callIdentifier) callIdentifier = topicIdentifier
-        }
-        
-        // Pattern: callIdentifier=XXX
-        const callMatch = item.link.match(/callIdentifier=([^&]+)/i)
+        const callMatch = item.link.match(/callCode=([^;&]+)/i) ||
+                         item.link.match(/callIdentifier=([^&]+)/i) ||
+                         item.link.match(/topic-details\/([A-Za-z0-9-_]+)/i)
         if (callMatch) {
           callIdentifier = decodeURIComponent(callMatch[1]).toUpperCase()
         }
-        
-        // Pattern: topicId=XXX
-        const topicIdMatch = item.link.match(/topicId=([^&]+)/i)
-        if (topicIdMatch && !topicIdentifier) {
-          topicIdentifier = decodeURIComponent(topicIdMatch[1]).toUpperCase()
-          if (!callIdentifier) callIdentifier = topicIdentifier
-        }
-      }
-      
-      // PRIORITY 3: Try guid for clean identifier
-      if (!callIdentifier && item.guid) {
-        const guidClean = item.guid.replace(/^.*\//, "").replace(/[^a-zA-Z0-9-_]/g, "")
-        if (guidClean.length > 5 && /[A-Z].*\d/.test(guidClean.toUpperCase())) {
-          callIdentifier = guidClean.toUpperCase()
-        }
-      }
-      
-      // PRIORITY 4: Generate from title if no identifier found
-      if (!callIdentifier) {
-        // Try to extract any alphanumeric code pattern from title
-        const codeMatch = item.title.match(/\b([A-Z]{2,}[-_]?20[0-9]{2}[-_][A-Z0-9]+)/i) ||
-                         item.title.match(/\b([A-Z]{3,}[-_][A-Z0-9]{2,}[-_]?[A-Z0-9]+)/i)
-        if (codeMatch) {
-          callIdentifier = codeMatch[1].toUpperCase().replace(/_/g, "-")
-        }
       }
 
-      // Generate unique expedient (OPPORTUNITY NUMBER) - use index to guarantee uniqueness if needed
-      const expedient = callIdentifier || topicIdentifier || `EU-${(index + 1).toString().padStart(5, "0")}`
-      
-      // Generate unique ID
+      // Generate unique expedient (OPPORTUNITY NUMBER)
+      const expedient = callIdentifier || `EU-${(index + 1).toString().padStart(5, "0")}`
       const uniqueId = `${expedient}-${index}`
 
-      // Parse dates
+      // Parse dates - prefer structured data
       const publishDate = item.pubDate ? this.formatDate(item.pubDate) : new Date().toISOString().split("T")[0]
-      
-      // Extract deadline from description with multiple patterns
-      let deadline = ""
-      const deadlinePatterns = [
-        /deadline[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-        /closes?[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-        /until[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-        /due[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-        /(\d{4}[\/\-]\d{2}[\/\-]\d{2})/,
-        /(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})/i,
-      ]
-      const textToSearch = (item.description || "") + " " + (item.title || "")
-      for (const pattern of deadlinePatterns) {
-        const match = textToSearch.match(pattern)
-        if (match) {
-          deadline = this.formatDate(match[1])
-          break
-        }
-      }
+      const deadline = structuredData.deadline || this.extractDeadlineFromText(item.description)
+      const openingDate = structuredData.openingDate || ""
 
-      // Clean description - remove HTML and entities
-      const rawDescription = (item.description || item.title)
-        .replace(/<[^>]*>/g, " ")
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'")
-        .replace(/&#\d+;/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-      
-      // Generate a useful summary description (2-3 lines max)
-      const cleanDescription = this.generateSummaryDescription(rawDescription, item.title, callIdentifier)
+      // Generate human-readable description (2 lines summary)
+      const description = this.generateHumanDescription(
+        item.title,
+        structuredData.pillar || "",
+        structuredData.latestInfo || "",
+        structuredData.budget || ""
+      )
 
-      // Extract budget/amount with multiple patterns
-      let amount = ""
-      const budgetPatterns = [
-        /(?:budget|amount|funding|total)[:\s]*(?:EUR|€)?\s*([\d.,]+\s*(?:million|M|billion|B|EUR)?)/i,
-        /(?:EUR|€)\s*([\d.,]+\s*(?:million|M|billion|B)?)/i,
-        /([\d.,]+)\s*(?:million|M)\s*(?:EUR|€|euros?)/i,
-      ]
-      for (const pattern of budgetPatterns) {
-        const match = cleanDescription.match(pattern)
-        if (match) {
-          amount = match[1].includes("EUR") ? match[1] : `EUR ${match[1]}`
-          break
-        }
-      }
-
-      // Extract programme from identifier or title
-      const program = this.extractProgramFromText(callIdentifier || topicIdentifier || item.title)
+      // Extract programme from identifier or pillar
+      const program = this.extractProgramFromText(callIdentifier || structuredData.pillar || item.title)
 
       // Build URL
-      const url = item.link || `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${(topicIdentifier || expedient).toLowerCase()}`
+      const url = item.link || `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${expedient.toLowerCase()}`
 
-      // Categorize based on content
-      const category = this.categorizeGrant(item.title, cleanDescription)
+      // Categorize based on pillar or content
+      const category = this.categorizeGrant(item.title, structuredData.pillar || description)
+
+      // Determine status from latest info
+      let status = "Open"
+      const latestLower = (structuredData.latestInfo || "").toLowerCase()
+      if (latestLower.includes("closed") || latestLower.includes("evaluation")) {
+        status = "Closed"
+      } else if (latestLower.includes("forthcoming") || latestLower.includes("upcoming")) {
+        status = "Forthcoming"
+      }
 
       return {
         id: `EU-${uniqueId}`,
@@ -290,10 +218,11 @@ export class EUFundingFetcher {
         organization: "European Commission",
         publishDate,
         deadline,
-        amount,
-        budget: amount,
+        openingDate,
+        amount: structuredData.budget || "",
+        budget: structuredData.budget || "",
         category,
-        description: cleanDescription,
+        description,
         expedient,
         callIdentifier: callIdentifier || undefined,
         topicIdentifier: topicIdentifier || undefined,
@@ -301,7 +230,7 @@ export class EUFundingFetcher {
         source: "eu",
         url,
         program,
-        status: "Open",
+        status,
         type: "Grant/Tender",
       }
     } catch {
@@ -310,67 +239,135 @@ export class EUFundingFetcher {
   }
 
   /**
-   * Generate a concise summary description (2-3 lines) from raw RSS content
-   * Extracts key information: what the opportunity is about, who can apply, and key focus areas
+   * Extract structured fields from HTML description
+   * Parses: Identifier, Pillar, Opening Date, Deadline, Budget, Latest information
    */
-  private generateSummaryDescription(rawText: string, title: string, callId: string): string {
-    if (!rawText || rawText.length < 20) {
-      return title || "EU funding opportunity. Visit the portal for full details."
+  private extractStructuredFields(html: string): {
+    identifier: string
+    pillar: string
+    openingDate: string
+    deadline: string
+    budget: string
+    latestInfo: string
+  } {
+    const result = {
+      identifier: "",
+      pillar: "",
+      openingDate: "",
+      deadline: "",
+      budget: "",
+      latestInfo: "",
     }
 
-    // Remove common RSS boilerplate text
-    let text = rawText
-      .replace(/click here|read more|more information|visit the portal|for more details/gi, "")
-      .replace(/\s+/g, " ")
+    if (!html) return result
+
+    // Extract Identifier: <b>Identifier</b>: HORIZON-CL5-2024-D5-01<br/>
+    const idMatch = html.match(/<b>Identifier<\/b>:\s*([^<\n]+)/i)
+    if (idMatch) result.identifier = idMatch[1].trim()
+
+    // Extract Pillar: <b>Pillar</b>: Climate, Energy and Mobility<br/>
+    const pillarMatch = html.match(/<b>Pillar<\/b>:\s*([^<\n]+)/i)
+    if (pillarMatch) result.pillar = pillarMatch[1].trim()
+
+    // Extract Opening Date: <b>Opening Date</b>: Mon, 15 Jan 2024<br/>
+    const openMatch = html.match(/<b>Opening Date<\/b>:\s*([^<\n]+)/i)
+    if (openMatch && openMatch[1].trim()) {
+      result.openingDate = this.formatDate(openMatch[1].trim())
+    }
+
+    // Extract Deadline: <b>Deadline</b>: Thu, 18 Apr 2024 17:00:00<br/>
+    const deadlineMatch = html.match(/<b>Deadline<\/b>:\s*([^<\n]+)/i)
+    if (deadlineMatch && deadlineMatch[1].trim()) {
+      result.deadline = this.formatDate(deadlineMatch[1].trim())
+    }
+
+    // Extract Budget if present
+    const budgetMatch = html.match(/<b>Budget<\/b>:\s*([^<\n]+)/i) ||
+                       html.match(/budget[:\s]+(?:EUR|€)?\s*([\d.,]+\s*(?:million|M|billion|B)?)/i)
+    if (budgetMatch) {
+      const budget = budgetMatch[1].trim()
+      result.budget = budget.includes("EUR") || budget.includes("€") ? budget : `EUR ${budget}`
+    }
+
+    // Extract Latest information content (skip HTML tags)
+    const latestMatch = html.match(/<b>Latest information<\/b>:\s*(?:<br\/?>)?\s*([\s\S]*?)(?:<br|$)/i)
+    if (latestMatch) {
+      result.latestInfo = latestMatch[1]
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&[^;]+;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .substring(0, 200)
+    }
+
+    return result
+  }
+
+  /**
+   * Generate a human-readable 2-line description
+   * Focus on: What the opportunity is about, pillar/area, and budget if available
+   */
+  private generateHumanDescription(title: string, pillar: string, latestInfo: string, budget: string): string {
+    const parts: string[] = []
+
+    // First line: Clean title or purpose
+    let mainDesc = title
+      .replace(/^Call\s+/i, "")
       .trim()
-
-    // If text is very short, use it as is
-    if (text.length < 150) {
-      return text
-    }
-
-    // Try to extract the first meaningful sentence(s)
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20)
     
-    if (sentences.length === 0) {
-      return text.substring(0, 200).trim() + "..."
+    // If title is just a code, make it more readable
+    if (/^[A-Z0-9-]+$/.test(mainDesc.replace(/\s/g, ""))) {
+      mainDesc = `EU funding opportunity: ${mainDesc}`
     }
+    
+    parts.push(mainDesc)
 
-    // Build summary from first 1-2 meaningful sentences (targeting ~200 chars)
-    let summary = ""
-    for (const sentence of sentences) {
-      const cleaned = sentence.trim()
-      if (cleaned.length < 15) continue
-      
-      // Skip sentences that are just metadata
-      if (/^(deadline|status|budget|call|topic|open|closed|published)/i.test(cleaned)) continue
-      
-      if (summary.length === 0) {
-        summary = cleaned
-      } else if (summary.length + cleaned.length < 250) {
-        summary += ". " + cleaned
-      } else {
-        break
+    // Second line: Pillar/Area + Budget
+    const details: string[] = []
+    
+    if (pillar && pillar.length > 3) {
+      details.push(`Area: ${pillar}`)
+    }
+    
+    if (budget && budget.length > 0) {
+      details.push(`Budget: ${budget}`)
+    }
+    
+    if (latestInfo && latestInfo.length > 10 && !latestInfo.toLowerCase().includes("published")) {
+      // Add meaningful latest info (e.g., "EVALUATION results")
+      const cleanInfo = latestInfo.substring(0, 80)
+      if (!cleanInfo.toLowerCase().includes("deadline")) {
+        details.push(`Status: ${cleanInfo}`)
       }
     }
 
-    // Ensure summary ends properly
-    if (summary.length > 0) {
-      summary = summary.trim()
-      if (!summary.endsWith(".") && !summary.endsWith("!") && !summary.endsWith("?")) {
-        summary += "."
+    if (details.length > 0) {
+      parts.push(details.join(" | "))
+    }
+
+    return parts.join(". ").substring(0, 350)
+  }
+
+  /**
+   * Extract deadline from text using multiple patterns
+   */
+  private extractDeadlineFromText(text: string): string {
+    if (!text) return ""
+    
+    const patterns = [
+      /Deadline[:\s]+([A-Za-z]{3},?\s*\d{1,2}\s+[A-Za-z]+\s+\d{4})/i,
+      /Deadline[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+      /(\d{4}[\/\-]\d{2}[\/\-]\d{2})/,
+    ]
+    
+    for (const pattern of patterns) {
+      const match = text.match(pattern)
+      if (match) {
+        return this.formatDate(match[1])
       }
-    } else {
-      summary = text.substring(0, 200).trim() + "..."
     }
-
-    // Add programme context if available and not already in summary
-    const program = this.extractProgramFromText(callId || title)
-    if (program && program !== "EU Funding & Tenders" && !summary.toUpperCase().includes(program.toUpperCase())) {
-      summary = `[${program}] ${summary}`
-    }
-
-    return summary.substring(0, 300)
+    
+    return ""
   }
 
   /**
@@ -396,6 +393,10 @@ export class EUFundingFetcher {
     if (t.includes("ISF")) return "Internal Security Fund"
     if (t.includes("EMFAF")) return "Maritime & Fisheries Fund"
     if (t.includes("SMP")) return "Single Market Programme"
+    if (t.includes("CLIMATE")) return "Climate, Energy and Mobility"
+    if (t.includes("CULTURE")) return "Culture, Creativity and Inclusive Society"
+    if (t.includes("CIVIL")) return "Civil Security for Society"
+    if (t.includes("FOOD")) return "Food, Bioeconomy, Natural Resources"
     
     return "EU Funding & Tenders"
   }
@@ -436,6 +437,15 @@ export class EUFundingFetcher {
     if (text.includes("education") || text.includes("training") || text.includes("erasmus")) {
       return "Education & Training"
     }
+    if (text.includes("culture") || text.includes("creative") || text.includes("media")) {
+      return "Culture & Creativity"
+    }
+    if (text.includes("food") || text.includes("agriculture") || text.includes("bioeconomy")) {
+      return "Food & Agriculture"
+    }
+    if (text.includes("civil") || text.includes("security") || text.includes("society")) {
+      return "Civil Security"
+    }
     
     return "General"
   }
@@ -447,14 +457,17 @@ export class EUFundingFetcher {
     if (!dateStr) return ""
     
     try {
+      // Remove time part if present
+      const cleanDate = dateStr.replace(/\s+\d{1,2}:\d{2}(:\d{2})?\s*(\(.*\))?$/i, "").trim()
+      
       // Handle various date formats
-      const date = new Date(dateStr)
+      const date = new Date(cleanDate)
       if (!isNaN(date.getTime())) {
         return date.toISOString().split("T")[0]
       }
       
       // Try DD/MM/YYYY or DD-MM-YYYY
-      const parts = dateStr.split(/[\/\-]/)
+      const parts = cleanDate.split(/[\/\-]/)
       if (parts.length === 3) {
         const day = parseInt(parts[0])
         const month = parseInt(parts[1])
@@ -466,7 +479,7 @@ export class EUFundingFetcher {
         }
       }
       
-      return dateStr
+      return cleanDate
     } catch {
       return dateStr
     }

@@ -1,9 +1,10 @@
 /**
- * EU Funding Fetcher - ONLY uses RSS Feed from EC Europa
+ * EU Funding Fetcher - Uses Official SEDIA API
  * 
- * Source: https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/callupdates-rss.xml
+ * API Endpoint: https://api.tech.ec.europa.eu/search-api/prod/rest/search
  * 
- * This is the ONLY source - contains all call updates directly from the EU Funding Portal
+ * This uses the official European Commission's Funding & Tenders Portal API
+ * for fast, reliable access to grant opportunities.
  */
 
 export interface EUGrant {
@@ -31,271 +32,247 @@ export interface EUGrant {
   actionType?: string
 }
 
+interface SEDIAResult {
+  identifier?: string
+  ccm2Id?: string
+  title?: string
+  callTitle?: string
+  deadlineDate?: string
+  deadlineDates?: string[]
+  openingDate?: string
+  publicationDate?: string
+  status?: string
+  budgetOverviewLine?: string
+  budgetTopicActionLine?: string
+  keywords?: string[]
+  tags?: string[]
+  frameworkProgramme?: string
+  type?: string
+  typeOfAction?: string
+  programmePeriod?: string
+  destination?: string
+  destinationDetails?: string
+  conditions?: string
+  actions?: Array<{
+    types?: string[]
+    status?: string
+    budgets?: Array<{
+      budgetTopicActionLump?: number
+      budgetYearMapList?: Array<{year?: number, value?: number}>
+    }>
+  }>
+}
+
+interface SEDIAResponse {
+  results?: SEDIAResult[]
+  totalResults?: number
+  page?: number
+  pageSize?: number
+}
+
 export class EUFundingFetcher {
+  private readonly API_URL = "https://api.tech.ec.europa.eu/search-api/prod/rest/search"
+  private readonly API_KEY = "SEDIA"
+  
   /**
-   * Fetch grants from EU RSS Feed
-   * Only returns OPEN and FORTHCOMING opportunities (excludes closed)
+   * Fetch grants from EU SEDIA API
+   * Only returns OPEN and FORTHCOMING opportunities
    */
   async fetchAllGrants(): Promise<EUGrant[]> {
-    console.log("[v0] EU - Fetching OPEN/FORTHCOMING opportunities from RSS feed...")
-
-    const grants = await this.fetchFromRSSFeed()
+    console.log("[v0] EU - Fetching from official SEDIA API...")
     
-    // Filter out closed opportunities based on deadline date
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const allGrants: EUGrant[] = []
     
-    const activeGrants = grants.filter(grant => {
-      // If status is explicitly "Closed", exclude
-      if (grant.status === "Closed") return false
-      
-      // If deadline exists and is in the past, exclude
-      if (grant.deadline) {
-        const deadlineDate = new Date(grant.deadline)
-        if (!isNaN(deadlineDate.getTime()) && deadlineDate < today) {
-          return false
-        }
-      }
-      
-      return true
-    })
+    // Fetch Open grants
+    const openGrants = await this.fetchByStatus("open")
+    allGrants.push(...openGrants)
+    console.log(`[v0] EU - Open grants: ${openGrants.length}`)
     
-    console.log(`[v0] EU - Total: ${grants.length}, Active (Open/Forthcoming): ${activeGrants.length}`)
-    return activeGrants
+    // Fetch Forthcoming grants
+    const forthcomingGrants = await this.fetchByStatus("forthcoming")
+    allGrants.push(...forthcomingGrants)
+    console.log(`[v0] EU - Forthcoming grants: ${forthcomingGrants.length}`)
+    
+    console.log(`[v0] EU - Total active grants: ${allGrants.length}`)
+    return allGrants
   }
 
   /**
-   * Fetch from EU Funding Portal RSS Feed
-   * https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/callupdates-rss.xml
+   * Fetch grants by status (open, forthcoming, closed)
    */
-  private async fetchFromRSSFeed(): Promise<EUGrant[]> {
+  private async fetchByStatus(status: "open" | "forthcoming" | "closed"): Promise<EUGrant[]> {
     const grants: EUGrant[] = []
-
-    try {
-      const rssUrl = "https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/callupdates-rss.xml"
-      
-      console.log("[v0] EU RSS - Fetching from ec.europa.eu RSS feed...")
-      
-      const response = await fetch(rssUrl, {
-        headers: {
-          "Accept": "application/xml, text/xml, application/rss+xml, */*",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Cache-Control": "no-cache",
-        },
-      })
-
-      if (!response.ok) {
-        console.log(`[v0] EU RSS - HTTP ${response.status}`)
-        return grants
-      }
-
-      const xmlText = await response.text()
-      if (!xmlText || xmlText.trim().length === 0) {
-        console.log("[v0] EU RSS - Empty response")
-        return grants
-      }
-
-      // Parse RSS items - only get those with future deadlines or no deadline
-      const items = this.parseRSSItems(xmlText)
-      console.log(`[v0] EU RSS - Found ${items.length} total items in feed`)
-
-      // Today's date for quick filtering
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const todayStr = today.toISOString().split("T")[0]
-
-      // Convert items to grants - skip closed ones early
-      let skippedClosed = 0
-      for (let i = 0; i < items.length; i++) {
-        // Quick check for closed status in description before full parsing
-        const descLower = (items[i].description || "").toLowerCase()
+    let page = 1
+    const pageSize = 100
+    let hasMore = true
+    
+    while (hasMore) {
+      try {
+        const query = this.buildQuery(status, page, pageSize)
         
-        // Quick deadline extraction to skip obviously closed items
-        const deadlineMatch = items[i].description.match(/<b>Deadline<\/b>:\s*([^<\n]+)/i)
-        if (deadlineMatch) {
-          const deadlineStr = this.formatDate(deadlineMatch[1].trim())
-          if (deadlineStr && deadlineStr < todayStr) {
-            skippedClosed++
-            continue // Skip items with past deadlines
+        const response = await fetch(this.API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify(query),
+        })
+        
+        if (!response.ok) {
+          console.log(`[v0] EU API - HTTP ${response.status} for ${status} page ${page}`)
+          break
+        }
+        
+        const data: SEDIAResponse = await response.json()
+        
+        if (!data.results || data.results.length === 0) {
+          hasMore = false
+          break
+        }
+        
+        // Parse results
+        for (const result of data.results) {
+          const grant = this.parseResult(result, status)
+          if (grant) {
+            grants.push(grant)
           }
         }
         
-        // Skip if explicitly marked as closed
-        if (descLower.includes("closed") && !descLower.includes("not closed")) {
-          skippedClosed++
-          continue
+        // Check if there are more pages
+        const totalResults = data.totalResults || 0
+        const currentCount = page * pageSize
+        hasMore = currentCount < totalResults && data.results.length === pageSize
+        page++
+        
+        // Safety limit - max 20 pages (2000 results per status)
+        if (page > 20) {
+          console.log(`[v0] EU API - Reached page limit for ${status}`)
+          hasMore = false
         }
         
-        const grant = this.parseRSSItem(items[i], i)
-        if (grant) {
-          grants.push(grant)
-        }
+      } catch (error) {
+        console.log(`[v0] EU API - Error fetching ${status} page ${page}:`, error instanceof Error ? error.message : error)
+        break
       }
-
-      console.log(`[v0] EU RSS - Parsed ${grants.length} active grants (skipped ${skippedClosed} closed)`)
-
-    } catch (error) {
-      console.log(`[v0] EU RSS - Error:`, error instanceof Error ? error.message : error)
     }
-
+    
     return grants
   }
 
   /**
-   * Parse RSS XML to extract ALL items
+   * Build SEDIA API query
    */
-  private parseRSSItems(xml: string): Array<{title: string, link: string, description: string, pubDate: string, guid: string}> {
-    const items: Array<{title: string, link: string, description: string, pubDate: string, guid: string}> = []
-    
-    // Match all <item> blocks
-    const itemRegex = /<item>([\s\S]*?)<\/item>/g
-    let match
-
-    while ((match = itemRegex.exec(xml)) !== null) {
-      const itemXml = match[1]
-      
-      const getTagContent = (tag: string): string => {
-        // Handle CDATA and regular content
-        const regex = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`)
-        const tagMatch = itemXml.match(regex)
-        return (tagMatch?.[1] || tagMatch?.[2] || "").trim()
+  private buildQuery(status: string, page: number, pageSize: number): object {
+    return {
+      apiKey: this.API_KEY,
+      text: "*",
+      pageSize,
+      pageNumber: page,
+      sort: {
+        field: "sortStatus",
+        order: "DESC"
+      },
+      languages: ["en"],
+      query: {
+        bool: {
+          must: [
+            {
+              terms: {
+                type: ["1", "2", "8"] // 1=Call for proposals, 2=Call for tenders, 8=Topics
+              }
+            },
+            {
+              terms: {
+                status: [this.mapStatus(status)]
+              }
+            }
+          ]
+        }
       }
-
-      items.push({
-        title: getTagContent("title"),
-        link: getTagContent("link"),
-        description: getTagContent("description"),
-        pubDate: getTagContent("pubDate"),
-        guid: getTagContent("guid"),
-      })
     }
-
-    return items
   }
 
   /**
-   * Parse RSS item into EUGrant with full detail extraction
-   * Extracts structured data from HTML description (Identifier, Pillar, Deadline, Budget)
+   * Map status to API values
    */
-  private parseRSSItem(item: {title: string, link: string, description: string, pubDate: string, guid: string}, index: number): EUGrant | null {
+  private mapStatus(status: string): string {
+    switch (status) {
+      case "open": return "31094501" // Open for submission
+      case "forthcoming": return "31094502" // Forthcoming
+      case "closed": return "31094503" // Closed
+      default: return "31094501"
+    }
+  }
+
+  /**
+   * Parse SEDIA result into EUGrant
+   */
+  private parseResult(result: SEDIAResult, statusHint: string): EUGrant | null {
     try {
-      if (!item.title) return null
-
-      // Extract structured fields from HTML description
-      const structuredData = this.extractStructuredFields(item.description)
+      const identifier = result.identifier || result.ccm2Id || ""
+      if (!identifier) return null
       
-      // Get call identifier from structured data or patterns
-      let callIdentifier = structuredData.identifier || ""
-      const topicIdentifier = ""
+      const title = result.title || result.callTitle || identifier
       
-      // If no identifier from structured data, try patterns
-      if (!callIdentifier) {
-        const searchText = `${item.title} ${item.link} ${item.guid}`.toUpperCase()
-        const programPatterns = [
-          /(HORIZON[-_]?[A-Z0-9]+[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-          /(EDF[-_]?20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-          /(DIGITAL[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-          /(CEF[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-          /(LIFE[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-          /(ERASMUS[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-          /(CREA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-          /(EUSPA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
-        ]
-        
-        for (const pattern of programPatterns) {
-          const match = searchText.match(pattern)
-          if (match) {
-            callIdentifier = match[1].replace(/_/g, "-")
-            break
-          }
-        }
+      // Extract deadline - use first deadline date if array
+      let deadline = ""
+      if (result.deadlineDate) {
+        deadline = this.formatDate(result.deadlineDate)
+      } else if (result.deadlineDates && result.deadlineDates.length > 0) {
+        // Get the latest deadline
+        const sortedDeadlines = result.deadlineDates.sort()
+        deadline = this.formatDate(sortedDeadlines[sortedDeadlines.length - 1])
       }
       
-      // Try link patterns as fallback
-      if (!callIdentifier && item.link) {
-        const callMatch = item.link.match(/callCode=([^;&]+)/i) ||
-                         item.link.match(/callIdentifier=([^&]+)/i) ||
-                         item.link.match(/topic-details\/([A-Za-z0-9-_]+)/i)
-        if (callMatch) {
-          callIdentifier = decodeURIComponent(callMatch[1]).toUpperCase()
-        }
-      }
-
-      // Generate unique expedient (OPPORTUNITY NUMBER)
-      const expedient = callIdentifier || `EU-${(index + 1).toString().padStart(5, "0")}`
-      const uniqueId = `${expedient}-${index}`
-
-      // Parse dates - prefer structured data
-      const publishDate = item.pubDate ? this.formatDate(item.pubDate) : new Date().toISOString().split("T")[0]
-      const deadline = structuredData.deadline || this.extractDeadlineFromText(item.description)
-      const openingDate = structuredData.openingDate || ""
-
-      // Generate human-readable description (2 lines summary)
-      const description = this.generateHumanDescription(
-        item.title,
-        structuredData.pillar || "",
-        structuredData.latestInfo || "",
-        structuredData.budget || ""
-      )
-
-      // Extract programme from identifier or pillar
-      const program = this.extractProgramFromText(callIdentifier || structuredData.pillar || item.title)
-
+      // Opening date
+      const openingDate = result.openingDate ? this.formatDate(result.openingDate) : ""
+      
+      // Publication date
+      const publishDate = result.publicationDate 
+        ? this.formatDate(result.publicationDate) 
+        : new Date().toISOString().split("T")[0]
+      
+      // Status
+      const status = this.parseStatus(result.status, statusHint)
+      
+      // Budget
+      const budget = this.extractBudget(result)
+      
+      // Programme
+      const program = this.extractProgram(result.frameworkProgramme, identifier)
+      
+      // Generate description
+      const description = this.generateDescription(title, result, budget)
+      
       // Build URL
-      const url = item.link || `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${expedient.toLowerCase()}`
-
-      // Categorize based on pillar or content
-      const category = this.categorizeGrant(item.title, structuredData.pillar || description)
-
-      // Determine status based on dates and latest info
-      let status = "Open"
-      const latestLower = (structuredData.latestInfo || "").toLowerCase()
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      const url = `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${identifier.toLowerCase()}`
       
-      // Check if explicitly closed in latest info
-      if (latestLower.includes("closed") || latestLower.includes("evaluation") || latestLower.includes("evaluated")) {
-        status = "Closed"
-      } 
-      // Check if deadline has passed
-      else if (deadline) {
-        const deadlineDate = new Date(deadline)
-        if (!isNaN(deadlineDate.getTime()) && deadlineDate < today) {
-          status = "Closed"
-        }
-      }
-      // Check if forthcoming (opening date in future or explicitly stated)
-      if (status !== "Closed") {
-        if (latestLower.includes("forthcoming") || latestLower.includes("upcoming")) {
-          status = "Forthcoming"
-        } else if (openingDate) {
-          const openDate = new Date(openingDate)
-          if (!isNaN(openDate.getTime()) && openDate > today) {
-            status = "Forthcoming"
-          }
-        }
-      }
-
+      // Category
+      const category = this.categorizeGrant(title, result.destination || result.destinationDetails || "")
+      
       return {
-        id: `EU-${uniqueId}`,
-        title: item.title,
+        id: `EU-${identifier}`,
+        title,
         organization: "European Commission",
         publishDate,
         deadline,
         openingDate,
-        amount: structuredData.budget || "",
-        budget: structuredData.budget || "",
+        amount: budget,
+        budget,
         category,
         description,
-        expedient,
-        callIdentifier: callIdentifier || undefined,
-        topicIdentifier: topicIdentifier || undefined,
+        expedient: identifier,
+        callIdentifier: identifier,
         sourceUrl: url,
         source: "eu",
         url,
         program,
+        programmePeriod: result.programmePeriod,
         status,
-        type: "Grant/Tender",
+        type: result.type || result.typeOfAction || "Grant",
+        keywords: result.keywords || result.tags,
+        actionType: result.typeOfAction,
       }
     } catch {
       return null
@@ -303,131 +280,52 @@ export class EUFundingFetcher {
   }
 
   /**
-   * Extract structured fields from HTML description
-   * Parses: Identifier, Pillar, Opening Date, Deadline, Budget, Latest information
+   * Parse status from API response
    */
-  private extractStructuredFields(html: string): {
-    identifier: string
-    pillar: string
-    openingDate: string
-    deadline: string
-    budget: string
-    latestInfo: string
-  } {
-    const result = {
-      identifier: "",
-      pillar: "",
-      openingDate: "",
-      deadline: "",
-      budget: "",
-      latestInfo: "",
+  private parseStatus(apiStatus: string | undefined, hint: string): string {
+    if (!apiStatus) {
+      return hint === "forthcoming" ? "Forthcoming" : "Open"
     }
-
-    if (!html) return result
-
-    // Extract Identifier: <b>Identifier</b>: HORIZON-CL5-2024-D5-01<br/>
-    const idMatch = html.match(/<b>Identifier<\/b>:\s*([^<\n]+)/i)
-    if (idMatch) result.identifier = idMatch[1].trim()
-
-    // Extract Pillar: <b>Pillar</b>: Climate, Energy and Mobility<br/>
-    const pillarMatch = html.match(/<b>Pillar<\/b>:\s*([^<\n]+)/i)
-    if (pillarMatch) result.pillar = pillarMatch[1].trim()
-
-    // Extract Opening Date: <b>Opening Date</b>: Mon, 15 Jan 2024<br/>
-    const openMatch = html.match(/<b>Opening Date<\/b>:\s*([^<\n]+)/i)
-    if (openMatch && openMatch[1].trim()) {
-      result.openingDate = this.formatDate(openMatch[1].trim())
+    
+    const statusLower = apiStatus.toLowerCase()
+    if (statusLower.includes("open") || statusLower.includes("submission")) {
+      return "Open"
     }
-
-    // Extract Deadline: <b>Deadline</b>: Thu, 18 Apr 2024 17:00:00<br/>
-    const deadlineMatch = html.match(/<b>Deadline<\/b>:\s*([^<\n]+)/i)
-    if (deadlineMatch && deadlineMatch[1].trim()) {
-      result.deadline = this.formatDate(deadlineMatch[1].trim())
+    if (statusLower.includes("forthcoming") || statusLower.includes("upcoming")) {
+      return "Forthcoming"
     }
-
-    // Extract Budget if present
-    const budgetMatch = html.match(/<b>Budget<\/b>:\s*([^<\n]+)/i) ||
-                       html.match(/budget[:\s]+(?:EUR|€)?\s*([\d.,]+\s*(?:million|M|billion|B)?)/i)
-    if (budgetMatch) {
-      const budget = budgetMatch[1].trim()
-      result.budget = budget.includes("EUR") || budget.includes("€") ? budget : `EUR ${budget}`
+    if (statusLower.includes("closed") || statusLower.includes("evaluation")) {
+      return "Closed"
     }
-
-    // Extract Latest information content (skip HTML tags)
-    const latestMatch = html.match(/<b>Latest information<\/b>:\s*(?:<br\/?>)?\s*([\s\S]*?)(?:<br|$)/i)
-    if (latestMatch) {
-      result.latestInfo = latestMatch[1]
-        .replace(/<[^>]*>/g, " ")
-        .replace(/&[^;]+;/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-        .substring(0, 200)
-    }
-
-    return result
+    
+    return hint === "forthcoming" ? "Forthcoming" : "Open"
   }
 
   /**
-   * Generate a human-readable 2-line description
-   * Focus on: What the opportunity is about, pillar/area, and budget if available
+   * Extract budget from result
    */
-  private generateHumanDescription(title: string, pillar: string, latestInfo: string, budget: string): string {
-    const parts: string[] = []
-
-    // First line: Clean title or purpose
-    let mainDesc = title
-      .replace(/^Call\s+/i, "")
-      .trim()
-    
-    // If title is just a code, make it more readable
-    if (/^[A-Z0-9-]+$/.test(mainDesc.replace(/\s/g, ""))) {
-      mainDesc = `EU funding opportunity: ${mainDesc}`
+  private extractBudget(result: SEDIAResult): string {
+    // Try direct budget fields
+    if (result.budgetOverviewLine) {
+      return result.budgetOverviewLine
+    }
+    if (result.budgetTopicActionLine) {
+      return result.budgetTopicActionLine
     }
     
-    parts.push(mainDesc)
-
-    // Second line: Pillar/Area + Budget
-    const details: string[] = []
-    
-    if (pillar && pillar.length > 3) {
-      details.push(`Area: ${pillar}`)
-    }
-    
-    if (budget && budget.length > 0) {
-      details.push(`Budget: ${budget}`)
-    }
-    
-    if (latestInfo && latestInfo.length > 10 && !latestInfo.toLowerCase().includes("published")) {
-      // Add meaningful latest info (e.g., "EVALUATION results")
-      const cleanInfo = latestInfo.substring(0, 80)
-      if (!cleanInfo.toLowerCase().includes("deadline")) {
-        details.push(`Status: ${cleanInfo}`)
-      }
-    }
-
-    if (details.length > 0) {
-      parts.push(details.join(" | "))
-    }
-
-    return parts.join(". ").substring(0, 350)
-  }
-
-  /**
-   * Extract deadline from text using multiple patterns
-   */
-  private extractDeadlineFromText(text: string): string {
-    if (!text) return ""
-    
-    const patterns = [
-      /Deadline[:\s]+([A-Za-z]{3},?\s*\d{1,2}\s+[A-Za-z]+\s+\d{4})/i,
-      /Deadline[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-      /(\d{4}[\/\-]\d{2}[\/\-]\d{2})/,
-    ]
-    
-    for (const pattern of patterns) {
-      const match = text.match(pattern)
-      if (match) {
-        return this.formatDate(match[1])
+    // Try to extract from actions
+    if (result.actions && result.actions.length > 0) {
+      for (const action of result.actions) {
+        if (action.budgets && action.budgets.length > 0) {
+          const budget = action.budgets[0]
+          if (budget.budgetTopicActionLump) {
+            const value = budget.budgetTopicActionLump
+            if (value >= 1000000) {
+              return `EUR ${(value / 1000000).toFixed(1)} million`
+            }
+            return `EUR ${value.toLocaleString()}`
+          }
+        }
       }
     }
     
@@ -435,41 +333,72 @@ export class EUFundingFetcher {
   }
 
   /**
-   * Extract programme name from text
+   * Extract programme name
    */
-  private extractProgramFromText(text: string): string {
-    const t = (text || "").toUpperCase()
+  private extractProgram(framework: string | undefined, identifier: string): string {
+    const text = `${framework || ""} ${identifier}`.toUpperCase()
     
-    if (t.includes("HORIZON")) return "Horizon Europe"
-    if (t.includes("EDF")) return "European Defence Fund"
-    if (t.includes("DIGITAL")) return "Digital Europe"
-    if (t.includes("CEF")) return "Connecting Europe Facility"
-    if (t.includes("LIFE")) return "LIFE Programme"
-    if (t.includes("ERASMUS")) return "Erasmus+"
-    if (t.includes("CREA")) return "Creative Europe"
-    if (t.includes("EU4H") || t.includes("HEALTH")) return "EU4Health"
-    if (t.includes("EUSPA")) return "EU Space Programme"
-    if (t.includes("EDIRPA")) return "EDIRPA"
-    if (t.includes("AGRIP")) return "Agricultural Promotion"
-    if (t.includes("AMIF")) return "Asylum & Migration Fund"
-    if (t.includes("JUST")) return "Justice Programme"
-    if (t.includes("CERV")) return "Citizens, Equality, Rights & Values"
-    if (t.includes("ISF")) return "Internal Security Fund"
-    if (t.includes("EMFAF")) return "Maritime & Fisheries Fund"
-    if (t.includes("SMP")) return "Single Market Programme"
-    if (t.includes("CLIMATE")) return "Climate, Energy and Mobility"
-    if (t.includes("CULTURE")) return "Culture, Creativity and Inclusive Society"
-    if (t.includes("CIVIL")) return "Civil Security for Society"
-    if (t.includes("FOOD")) return "Food, Bioeconomy, Natural Resources"
+    if (text.includes("HORIZON")) return "Horizon Europe"
+    if (text.includes("EDF")) return "European Defence Fund"
+    if (text.includes("DIGITAL")) return "Digital Europe"
+    if (text.includes("CEF")) return "Connecting Europe Facility"
+    if (text.includes("LIFE")) return "LIFE Programme"
+    if (text.includes("ERASMUS")) return "Erasmus+"
+    if (text.includes("CREA")) return "Creative Europe"
+    if (text.includes("EU4H") || text.includes("HEALTH")) return "EU4Health"
+    if (text.includes("EUSPA")) return "EU Space Programme"
+    if (text.includes("EDIRPA")) return "EDIRPA"
+    if (text.includes("AGRIP")) return "Agricultural Promotion"
+    if (text.includes("AMIF")) return "Asylum & Migration Fund"
+    if (text.includes("JUST")) return "Justice Programme"
+    if (text.includes("CERV")) return "Citizens, Equality, Rights & Values"
+    if (text.includes("ISF")) return "Internal Security Fund"
+    if (text.includes("EMFAF")) return "Maritime & Fisheries Fund"
+    if (text.includes("SMP")) return "Single Market Programme"
     
-    return "EU Funding & Tenders"
+    return framework || "EU Funding & Tenders"
   }
 
   /**
-   * Categorize grant based on content
+   * Generate human-readable description
    */
-  private categorizeGrant(title: string, description: string): string {
-    const text = `${title} ${description}`.toLowerCase()
+  private generateDescription(title: string, result: SEDIAResult, budget: string): string {
+    const parts: string[] = []
+    
+    // Clean title
+    let mainDesc = title.replace(/^Call\s+/i, "").trim()
+    if (/^[A-Z0-9-]+$/.test(mainDesc.replace(/\s/g, ""))) {
+      mainDesc = `EU funding opportunity: ${mainDesc}`
+    }
+    parts.push(mainDesc)
+    
+    // Add details
+    const details: string[] = []
+    
+    if (result.destination || result.destinationDetails) {
+      details.push(`Area: ${result.destination || result.destinationDetails}`)
+    }
+    
+    if (budget) {
+      details.push(`Budget: ${budget}`)
+    }
+    
+    if (result.typeOfAction) {
+      details.push(`Type: ${result.typeOfAction}`)
+    }
+    
+    if (details.length > 0) {
+      parts.push(details.join(" | "))
+    }
+    
+    return parts.join(". ").substring(0, 400)
+  }
+
+  /**
+   * Categorize grant
+   */
+  private categorizeGrant(title: string, destination: string): string {
+    const text = `${title} ${destination}`.toLowerCase()
     
     if (text.includes("defence") || text.includes("defense") || text.includes("military") || text.includes("edf")) {
       return "Defence & Security"
@@ -521,29 +450,18 @@ export class EUFundingFetcher {
     if (!dateStr) return ""
     
     try {
-      // Remove time part if present
-      const cleanDate = dateStr.replace(/\s+\d{1,2}:\d{2}(:\d{2})?\s*(\(.*\))?$/i, "").trim()
+      // Handle ISO format
+      if (dateStr.includes("T") || dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+        return dateStr.split("T")[0]
+      }
       
-      // Handle various date formats
-      const date = new Date(cleanDate)
+      // Try parsing
+      const date = new Date(dateStr)
       if (!isNaN(date.getTime())) {
         return date.toISOString().split("T")[0]
       }
       
-      // Try DD/MM/YYYY or DD-MM-YYYY
-      const parts = cleanDate.split(/[\/\-]/)
-      if (parts.length === 3) {
-        const day = parseInt(parts[0])
-        const month = parseInt(parts[1])
-        const year = parseInt(parts[2])
-        
-        if (day > 0 && day <= 31 && month > 0 && month <= 12) {
-          const fullYear = year < 100 ? 2000 + year : year
-          return `${fullYear}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`
-        }
-      }
-      
-      return cleanDate
+      return dateStr
     } catch {
       return dateStr
     }

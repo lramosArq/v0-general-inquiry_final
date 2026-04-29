@@ -48,11 +48,13 @@ export class EUFundingFetcher {
 
   /**
    * Fetch from main RSS feed and filter for Open/Forthcoming
+   * STRICT filtering: Only include items with valid future deadlines
    */
   private async fetchFromRSS(url: string): Promise<EUGrant[]> {
     const grants: EUGrant[] = []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+    const todayStr = today.toISOString().split("T")[0]
     
     try {
       const response = await fetch(url, {
@@ -72,45 +74,74 @@ export class EUFundingFetcher {
       let openCount = 0
       let forthcomingCount = 0
       let closedCount = 0
+      let noDeadlineCount = 0
       
       for (let i = 0; i < items.length; i++) {
-        // Extract deadline and status early to filter
-        const data = this.extractStructuredData(items[i].description)
-        const latestInfo = (items[i].description || "").toLowerCase()
+        const desc = items[i].description || ""
+        const descLower = desc.toLowerCase()
         
-        // Determine status
-        let status = "Open"
+        // Extract structured data
+        const data = this.extractStructuredData(desc)
         
-        // Check if closed
-        if (latestInfo.includes("closed") || latestInfo.includes("evaluation")) {
-          status = "Closed"
+        // STRICT: Skip if explicitly marked as closed/evaluation/awarded
+        if (descLower.includes("closed") || 
+            descLower.includes("evaluation") ||
+            descLower.includes("evaluated") ||
+            descLower.includes("awarded") ||
+            descLower.includes("grant agreement")) {
           closedCount++
-          continue // Skip closed
+          continue
         }
         
-        // Check deadline
+        // STRICT: Check deadline - if no valid future deadline, check status field
+        let hasValidFutureDeadline = false
+        let isForthcoming = false
+        
         if (data.deadline) {
-          const deadlineDate = new Date(data.deadline)
-          if (!isNaN(deadlineDate.getTime()) && deadlineDate < today) {
-            status = "Closed"
+          // Compare as strings YYYY-MM-DD for reliability
+          if (data.deadline >= todayStr) {
+            hasValidFutureDeadline = true
+          } else {
+            // Deadline passed - skip
             closedCount++
-            continue // Skip closed
+            continue
           }
         }
         
-        // Check if forthcoming
-        if (latestInfo.includes("forthcoming") || latestInfo.includes("upcoming")) {
+        // Check if forthcoming (opening date in future)
+        if (descLower.includes("forthcoming") || descLower.includes("upcoming")) {
+          isForthcoming = true
+        } else if (data.openingDate && data.openingDate > todayStr) {
+          isForthcoming = true
+        }
+        
+        // STRICT: If no deadline found, only include if explicitly Open/Forthcoming
+        if (!data.deadline) {
+          // Check for explicit status indicators
+          const hasOpenIndicator = descLower.includes("open for submission") || 
+                                   descLower.includes("status: open") ||
+                                   descLower.includes("submission open")
+          const hasForthcomingIndicator = descLower.includes("forthcoming") ||
+                                          descLower.includes("upcoming") ||
+                                          descLower.includes("opening soon")
+          
+          if (!hasOpenIndicator && !hasForthcomingIndicator) {
+            noDeadlineCount++
+            continue // Skip items with no deadline and no clear status
+          }
+          
+          if (hasForthcomingIndicator) {
+            isForthcoming = true
+          }
+        }
+        
+        // Determine final status
+        let status: string
+        if (isForthcoming) {
           status = "Forthcoming"
           forthcomingCount++
-        } else if (data.openingDate) {
-          const openDate = new Date(data.openingDate)
-          if (!isNaN(openDate.getTime()) && openDate > today) {
-            status = "Forthcoming"
-            forthcomingCount++
-          } else {
-            openCount++
-          }
         } else {
+          status = "Open"
           openCount++
         }
         
@@ -120,7 +151,7 @@ export class EUFundingFetcher {
         }
       }
       
-      console.log(`[v0] EU RSS - Open: ${openCount}, Forthcoming: ${forthcomingCount}, Skipped Closed: ${closedCount}`)
+      console.log(`[v0] EU RSS - Open: ${openCount}, Forthcoming: ${forthcomingCount}, Closed: ${closedCount}, NoDeadline/Skipped: ${noDeadlineCount}`)
       
     } catch (error) {
       console.log(`[v0] EU RSS - Error:`, error instanceof Error ? error.message : error)

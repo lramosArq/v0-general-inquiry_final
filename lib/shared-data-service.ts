@@ -91,13 +91,26 @@ class SharedDataServiceImpl implements SharedDataService {
   async fetchClaims(): Promise<any[]> {
     try {
       const response = await fetch(`${this.baseUrl}?type=claims`)
+      
+      // Check if response is OK before parsing JSON
+      if (!response.ok) {
+        console.warn(`fetchClaims: Server returned ${response.status}`)
+        // Fallback to localStorage on server error
+        const stored = typeof localStorage !== "undefined" ? localStorage.getItem("opportunityClaims") : null
+        return stored ? JSON.parse(stored) : []
+      }
+      
       const result = await response.json()
       return result.success ? result.data : []
     } catch (error) {
       console.error("Error fetching claims:", error)
       // Fallback to localStorage
-      const stored = localStorage.getItem("opportunityClaims")
-      return stored ? JSON.parse(stored) : []
+      try {
+        const stored = typeof localStorage !== "undefined" ? localStorage.getItem("opportunityClaims") : null
+        return stored ? JSON.parse(stored) : []
+      } catch {
+        return []
+      }
     }
   }
 
@@ -108,15 +121,26 @@ class SharedDataServiceImpl implements SharedDataService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "claims", action: "sync", data: claims }),
       })
+      
+      if (!response.ok) {
+        console.warn(`syncClaims: Server returned ${response.status}`)
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("opportunityClaims", JSON.stringify(claims))
+        }
+        return claims
+      }
+      
       const result = await response.json()
-      if (result.success) {
+      if (result.success && typeof localStorage !== "undefined") {
         localStorage.setItem("opportunityClaims", JSON.stringify(result.data))
         this.notifyListeners("claims", result.data)
       }
       return result.data || claims
     } catch (error) {
       console.error("Error syncing claims:", error)
-      localStorage.setItem("opportunityClaims", JSON.stringify(claims))
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("opportunityClaims", JSON.stringify(claims))
+      }
       return claims
     }
   }
@@ -128,8 +152,19 @@ class SharedDataServiceImpl implements SharedDataService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "claims", action: "claim", data: claim }),
       })
+      
+      if (!response.ok) {
+        console.warn(`addClaim: Server returned ${response.status}`)
+        const current = await this.fetchClaims()
+        current.push(claim)
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("opportunityClaims", JSON.stringify(current))
+        }
+        return current
+      }
+      
       const result = await response.json()
-      if (result.success) {
+      if (result.success && typeof localStorage !== "undefined") {
         localStorage.setItem("opportunityClaims", JSON.stringify(result.data))
         this.notifyListeners("claims", result.data)
       }
@@ -138,7 +173,9 @@ class SharedDataServiceImpl implements SharedDataService {
       console.error("Error adding claim:", error)
       const current = await this.fetchClaims()
       current.push(claim)
-      localStorage.setItem("opportunityClaims", JSON.stringify(current))
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("opportunityClaims", JSON.stringify(current))
+      }
       return current
     }
   }
@@ -154,8 +191,19 @@ class SharedDataServiceImpl implements SharedDataService {
           data: { opportunityId },
         }),
       })
+      
+      if (!response.ok) {
+        console.warn(`removeClaim: Server returned ${response.status}`)
+        const current = await this.fetchClaims()
+        const filtered = current.filter((c) => c.opportunityId !== opportunityId)
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("opportunityClaims", JSON.stringify(filtered))
+        }
+        return filtered
+      }
+      
       const result = await response.json()
-      if (result.success) {
+      if (result.success && typeof localStorage !== "undefined") {
         localStorage.setItem("opportunityClaims", JSON.stringify(result.data))
         this.notifyListeners("claims", result.data)
       }
@@ -164,7 +212,9 @@ class SharedDataServiceImpl implements SharedDataService {
       console.error("Error removing claim:", error)
       const current = await this.fetchClaims()
       const filtered = current.filter((c) => c.opportunityId !== opportunityId)
-      localStorage.setItem("opportunityClaims", JSON.stringify(filtered))
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("opportunityClaims", JSON.stringify(filtered))
+      }
       return filtered
     }
   }
@@ -173,6 +223,12 @@ class SharedDataServiceImpl implements SharedDataService {
   async fetchAlerts(userId: string): Promise<any[]> {
     try {
       const response = await fetch(`${this.baseUrl}?type=alerts&userId=${userId}`)
+      
+      if (!response.ok) {
+        console.warn(`fetchAlerts: Server returned ${response.status}`)
+        return []
+      }
+      
       const result = await response.json()
       return result.success ? result.data : []
     } catch (error) {
@@ -188,6 +244,12 @@ class SharedDataServiceImpl implements SharedDataService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "alerts", userId, action: "sync", data: alerts }),
       })
+      
+      if (!response.ok) {
+        console.warn(`syncAlerts: Server returned ${response.status}`)
+        return alerts
+      }
+      
       const result = await response.json()
       if (result.success) {
         this.notifyListeners("alerts", { userId, alerts: result.data })
@@ -206,6 +268,12 @@ class SharedDataServiceImpl implements SharedDataService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "alerts", userId, action: "add", data: alert }),
       })
+      
+      if (!response.ok) {
+        console.warn(`addAlert: Server returned ${response.status}`)
+        return []
+      }
+      
       const result = await response.json()
       if (result.success) {
         this.notifyListeners("alerts", { userId, alerts: result.data })
@@ -229,6 +297,12 @@ class SharedDataServiceImpl implements SharedDataService {
           data: { alertId },
         }),
       })
+      
+      if (!response.ok) {
+        console.warn(`removeAlert: Server returned ${response.status}`)
+        return []
+      }
+      
       const result = await response.json()
       if (result.success) {
         this.notifyListeners("alerts", { userId, alerts: result.data })
@@ -244,6 +318,12 @@ class SharedDataServiceImpl implements SharedDataService {
   async fetchSettings(userId: string): Promise<any> {
     try {
       const response = await fetch(`${this.baseUrl}?type=settings&userId=${userId}`)
+      
+      if (!response.ok) {
+        console.warn(`fetchSettings: Server returned ${response.status}`)
+        return {}
+      }
+      
       const result = await response.json()
       return result.success ? result.data : {}
     } catch (error) {
@@ -259,6 +339,12 @@ class SharedDataServiceImpl implements SharedDataService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "settings", userId, data: settings }),
       })
+      
+      if (!response.ok) {
+        console.warn(`syncSettings: Server returned ${response.status}`)
+        return settings
+      }
+      
       const result = await response.json()
       if (result.success) {
         this.notifyListeners("settings", { userId, settings: result.data })
@@ -274,12 +360,27 @@ class SharedDataServiceImpl implements SharedDataService {
   async fetchFeedback(): Promise<any> {
     try {
       const response = await fetch(`${this.baseUrl}?type=feedback`)
+      
+      if (!response.ok) {
+        console.warn(`fetchFeedback: Server returned ${response.status}`)
+        try {
+          const stored = typeof localStorage !== "undefined" ? localStorage.getItem("grantInterestFeedback") : null
+          return stored ? JSON.parse(stored) : {}
+        } catch {
+          return {}
+        }
+      }
+      
       const result = await response.json()
       return result.success ? result.data : {}
     } catch (error) {
       console.error("Error fetching feedback:", error)
-      const stored = localStorage.getItem("grantInterestFeedback")
-      return stored ? JSON.parse(stored) : {}
+      try {
+        const stored = typeof localStorage !== "undefined" ? localStorage.getItem("grantInterestFeedback") : null
+        return stored ? JSON.parse(stored) : {}
+      } catch {
+        return {}
+      }
     }
   }
 
@@ -290,15 +391,26 @@ class SharedDataServiceImpl implements SharedDataService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "feedback", action: "update", data: feedback }),
       })
+      
+      if (!response.ok) {
+        console.warn(`syncFeedback: Server returned ${response.status}`)
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("grantInterestFeedback", JSON.stringify(feedback))
+        }
+        return feedback
+      }
+      
       const result = await response.json()
-      if (result.success) {
+      if (result.success && typeof localStorage !== "undefined") {
         localStorage.setItem("grantInterestFeedback", JSON.stringify(result.data))
         this.notifyListeners("feedback", result.data)
       }
       return result.data || feedback
     } catch (error) {
       console.error("Error syncing feedback:", error)
-      localStorage.setItem("grantInterestFeedback", JSON.stringify(feedback))
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("grantInterestFeedback", JSON.stringify(feedback))
+      }
       return feedback
     }
   }
@@ -307,6 +419,12 @@ class SharedDataServiceImpl implements SharedDataService {
   async fetchAllData(): Promise<any> {
     try {
       const response = await fetch(this.baseUrl)
+      
+      if (!response.ok) {
+        console.warn(`fetchAllData: Server returned ${response.status}`)
+        return {}
+      }
+      
       const result = await response.json()
       return result.success ? result.data : {}
     } catch (error) {

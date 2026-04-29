@@ -57,8 +57,16 @@ function generateDirectUrl(grant: any, source: "usa" | "eu" | "spain"): string {
       return `https://www.grants.gov/search?keywords=${encodeURIComponent(title.substring(0, 50))}`
       
     case "eu":
-      // EU Funding & Tenders Portal - search by title for reliable results
-      const searchTerm = title ? title.substring(0, 60) : id
+      // EU Funding & Tenders Portal - use topic-details if we have a valid identifier
+      const euId = (grant.expedient || id).toUpperCase()
+      
+      // If identifier looks like a standard EU call (HORIZON-xxx, EDF-xxx, etc.)
+      if (/^(HORIZON|EDF|DIGITAL|CEF|LIFE|ERASMUS|CREA|EUSPA|EDIRPA|AGRIP|AMIF|CERV|EU4H|ISF|SMP|EMFAF|JUST)[-_]/.test(euId)) {
+        return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${euId.toLowerCase()}`
+      }
+      
+      // Otherwise search by the identifier or title
+      const searchTerm = euId.startsWith("EU-") ? title.substring(0, 60) : euId
       return `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search?keywords=${encodeURIComponent(searchTerm)}`
       
     case "spain":
@@ -87,9 +95,18 @@ function generateDirectUrl(grant: any, source: "usa" | "eu" | "spain"): string {
 }
 
 function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
+  // For EU grants, use the extracted call/topic identifier as opportunity number
+  // This ensures the "Opportunity Number" column shows meaningful identifiers like HORIZON-CL4-2025-xxx
+  let opportunityNumber = grant.expedient || grant.id
+  
+  // For EU: prefer callIdentifier or topicIdentifier if available
+  if (source === "eu") {
+    opportunityNumber = grant.callIdentifier || grant.topicIdentifier || grant.expedient || grant.id
+  }
+  
   return {
     id: grant.id,
-    opportunityNumber: grant.expedient || grant.id,
+    opportunityNumber,
     title: grant.title,
     agency: grant.organization,
     status: grant.status || "Open",
@@ -97,10 +114,11 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
     closeDate: grant.deadline,
     description: grant.description,
     category: grant.category,
-    fundingInstrument: grant.amount || grant.type,
+    fundingInstrument: grant.amount || grant.budget || grant.type,
     source: source,
     url: generateDirectUrl(grant, source),
-    portal: grant.portal || undefined,
+    portal: grant.portal || (source === "eu" ? grant.program : undefined),
+    program: grant.program,
   }
 }
 

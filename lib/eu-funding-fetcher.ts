@@ -131,48 +131,93 @@ export class EUFundingFetcher {
 
   /**
    * Parse RSS item into EUGrant with full detail extraction
+   * Extracts OPPORTUNITY NUMBER (callIdentifier) as the primary identifier
    */
   private parseRSSItem(item: {title: string, link: string, description: string, pubDate: string, guid: string}, index: number): EUGrant | null {
     try {
       if (!item.title) return null
 
-      // Extract identifiers from multiple sources
+      // Extract identifiers - prioritize OPPORTUNITY NUMBER patterns
       let callIdentifier = ""
       let topicIdentifier = ""
       
-      // Try link patterns
-      if (item.link) {
+      // Combined text for searching
+      const searchText = `${item.title} ${item.description} ${item.link} ${item.guid}`.toUpperCase()
+      
+      // PRIORITY 1: Extract EU programme call identifiers from ANY field
+      // Standard EU patterns: HORIZON-xxx, EDF-xxx, DIGITAL-xxx, CEF-xxx, etc.
+      const programPatterns = [
+        // Main programme patterns
+        /(HORIZON[-_]?[A-Z0-9]+[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(EDF[-_]?20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(DIGITAL[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(CEF[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(LIFE[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(ERASMUS[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(CREA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(EUSPA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(EDIRPA[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(AGRIP[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(AMIF[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(CERV[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(EU4H[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(ISF[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(SMP[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(EMFAF[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+        /(JUST[-_]20[0-9]{2}[-_][A-Z0-9]+[-_]?[A-Z0-9-_]*)/i,
+      ]
+      
+      for (const pattern of programPatterns) {
+        const match = searchText.match(pattern)
+        if (match) {
+          callIdentifier = match[1].replace(/_/g, "-")
+          break
+        }
+      }
+      
+      // PRIORITY 2: Try link patterns
+      if (!callIdentifier && item.link) {
         // Pattern: /topic-details/IDENTIFIER
         const topicMatch = item.link.match(/topic-details\/([A-Za-z0-9-_]+)/i)
         if (topicMatch) {
           topicIdentifier = topicMatch[1].toUpperCase()
+          if (!callIdentifier) callIdentifier = topicIdentifier
         }
         
         // Pattern: callIdentifier=XXX
         const callMatch = item.link.match(/callIdentifier=([^&]+)/i)
         if (callMatch) {
-          callIdentifier = decodeURIComponent(callMatch[1])
+          callIdentifier = decodeURIComponent(callMatch[1]).toUpperCase()
+        }
+        
+        // Pattern: topicId=XXX
+        const topicIdMatch = item.link.match(/topicId=([^&]+)/i)
+        if (topicIdMatch && !topicIdentifier) {
+          topicIdentifier = decodeURIComponent(topicIdMatch[1]).toUpperCase()
+          if (!callIdentifier) callIdentifier = topicIdentifier
         }
       }
       
-      // Try guid
+      // PRIORITY 3: Try guid for clean identifier
       if (!callIdentifier && item.guid) {
         const guidClean = item.guid.replace(/^.*\//, "").replace(/[^a-zA-Z0-9-_]/g, "")
-        if (guidClean.length > 3) {
+        if (guidClean.length > 5 && /[A-Z].*\d/.test(guidClean.toUpperCase())) {
           callIdentifier = guidClean.toUpperCase()
         }
       }
       
-      // Try title for identifier patterns (EU funding identifiers)
-      if (!callIdentifier && !topicIdentifier) {
-        const titleMatch = item.title.match(/(HORIZON|EDF|DIGITAL|CEF|LIFE|ERASMUS|CREA|EUSPA|EDIRPA|AGRIP|AMIF|CERV|EU4H)[A-Z0-9-]*/i)
-        if (titleMatch) {
-          callIdentifier = titleMatch[0].toUpperCase()
+      // PRIORITY 4: Generate from title if no identifier found
+      if (!callIdentifier) {
+        // Try to extract any alphanumeric code pattern from title
+        const codeMatch = item.title.match(/\b([A-Z]{2,}[-_]?20[0-9]{2}[-_][A-Z0-9]+)/i) ||
+                         item.title.match(/\b([A-Z]{3,}[-_][A-Z0-9]{2,}[-_]?[A-Z0-9]+)/i)
+        if (codeMatch) {
+          callIdentifier = codeMatch[1].toUpperCase().replace(/_/g, "-")
         }
       }
 
-      // Generate unique expedient - use index to guarantee uniqueness
-      const expedient = callIdentifier || topicIdentifier || `EU-OPP-${index + 1}`
+      // Generate unique expedient (OPPORTUNITY NUMBER) - use index to guarantee uniqueness if needed
+      const expedient = callIdentifier || topicIdentifier || `EU-${(index + 1).toString().padStart(5, "0")}`
       
       // Generate unique ID
       const uniqueId = `${expedient}-${index}`

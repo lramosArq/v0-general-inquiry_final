@@ -110,7 +110,10 @@ export class EUFundingFetcher {
       try {
         const query = this.buildQuery(status, page, pageSize)
         
-        const response = await fetch(this.API_URL, {
+        // apiKey MUST be in the query string, not in the body
+        const url = `${this.API_URL}?apiKey=${this.API_KEY}`
+        
+        const response = await fetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -162,10 +165,10 @@ export class EUFundingFetcher {
 
   /**
    * Build SEDIA API query
+   * Note: apiKey goes in query string, not in body
    */
   private buildQuery(status: string, page: number, pageSize: number): object {
     return {
-      apiKey: this.API_KEY,
       text: "*",
       pageSize,
       pageNumber: page,

@@ -28,40 +28,31 @@ export interface EUGrant {
 }
 
 export class EUFundingFetcher {
-  // Use filtered RSS feeds for Open and Forthcoming only
-  private readonly RSS_OPEN = "https://ec.europa.eu/info/funding-tenders/opportunities/portal/data/OpenForSubmission-TopicsOpenForSubmission.rss"
-  private readonly RSS_FORTHCOMING = "https://ec.europa.eu/info/funding-tenders/opportunities/portal/data/Forthcoming-TopicsForthcoming.rss"
+  // Main RSS feed - contains all opportunities
+  private readonly RSS_URL = "https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/rss.rss"
   
   /**
-   * Fetch grants - ONLY Open and Forthcoming
-   * Uses separate RSS feeds for each status for maximum speed
+   * Fetch grants - filters for Open and Forthcoming during parsing
    */
   async fetchAllGrants(): Promise<EUGrant[]> {
-    console.log("[v0] EU - Fetching Open and Forthcoming from RSS feeds...")
+    console.log("[v0] EU - Fetching from main RSS feed...")
     
     const startTime = Date.now()
-    const allGrants: EUGrant[] = []
-    
-    // Fetch both feeds in parallel for speed
-    const [openGrants, forthcomingGrants] = await Promise.all([
-      this.fetchFromRSS(this.RSS_OPEN, "Open"),
-      this.fetchFromRSS(this.RSS_FORTHCOMING, "Forthcoming")
-    ])
-    
-    allGrants.push(...openGrants)
-    allGrants.push(...forthcomingGrants)
+    const grants = await this.fetchFromRSS(this.RSS_URL)
     
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`[v0] EU - Loaded ${allGrants.length} grants (${openGrants.length} open, ${forthcomingGrants.length} forthcoming) in ${elapsed}s`)
+    console.log(`[v0] EU - Loaded ${grants.length} active grants in ${elapsed}s`)
     
-    return allGrants
+    return grants
   }
 
   /**
-   * Fetch from a specific RSS feed
+   * Fetch from main RSS feed and filter for Open/Forthcoming
    */
-  private async fetchFromRSS(url: string, status: string): Promise<EUGrant[]> {
+  private async fetchFromRSS(url: string): Promise<EUGrant[]> {
     const grants: EUGrant[] = []
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
     
     try {
       const response = await fetch(url, {
@@ -70,24 +61,69 @@ export class EUFundingFetcher {
       })
       
       if (!response.ok) {
-        console.log(`[v0] EU RSS ${status} - HTTP ${response.status}`)
+        console.log(`[v0] EU RSS - HTTP ${response.status}`)
         return []
       }
       
       const xml = await response.text()
       const items = this.parseRSSItems(xml)
+      console.log(`[v0] EU RSS - Total items in feed: ${items.length}`)
+      
+      let openCount = 0
+      let forthcomingCount = 0
+      let closedCount = 0
       
       for (let i = 0; i < items.length; i++) {
+        // Extract deadline and status early to filter
+        const data = this.extractStructuredData(items[i].description)
+        const latestInfo = (items[i].description || "").toLowerCase()
+        
+        // Determine status
+        let status = "Open"
+        
+        // Check if closed
+        if (latestInfo.includes("closed") || latestInfo.includes("evaluation")) {
+          status = "Closed"
+          closedCount++
+          continue // Skip closed
+        }
+        
+        // Check deadline
+        if (data.deadline) {
+          const deadlineDate = new Date(data.deadline)
+          if (!isNaN(deadlineDate.getTime()) && deadlineDate < today) {
+            status = "Closed"
+            closedCount++
+            continue // Skip closed
+          }
+        }
+        
+        // Check if forthcoming
+        if (latestInfo.includes("forthcoming") || latestInfo.includes("upcoming")) {
+          status = "Forthcoming"
+          forthcomingCount++
+        } else if (data.openingDate) {
+          const openDate = new Date(data.openingDate)
+          if (!isNaN(openDate.getTime()) && openDate > today) {
+            status = "Forthcoming"
+            forthcomingCount++
+          } else {
+            openCount++
+          }
+        } else {
+          openCount++
+        }
+        
         const grant = this.parseItem(items[i], status, i)
         if (grant) {
           grants.push(grant)
         }
       }
       
-      console.log(`[v0] EU RSS ${status} - Parsed ${grants.length} grants`)
+      console.log(`[v0] EU RSS - Open: ${openCount}, Forthcoming: ${forthcomingCount}, Skipped Closed: ${closedCount}`)
       
     } catch (error) {
-      console.log(`[v0] EU RSS ${status} - Error:`, error instanceof Error ? error.message : error)
+      console.log(`[v0] EU RSS - Error:`, error instanceof Error ? error.message : error)
     }
     
     return grants

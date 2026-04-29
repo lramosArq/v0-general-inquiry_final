@@ -33,16 +33,35 @@ export interface EUGrant {
 
 export class EUFundingFetcher {
   /**
-   * Fetch ALL grants from EU RSS Feed
-   * This is the ONLY source - returns all items without filtering
+   * Fetch grants from EU RSS Feed
+   * Only returns OPEN and FORTHCOMING opportunities (excludes closed)
    */
   async fetchAllGrants(): Promise<EUGrant[]> {
-    console.log("[v0] EU - Fetching ALL opportunities from RSS feed...")
+    console.log("[v0] EU - Fetching OPEN/FORTHCOMING opportunities from RSS feed...")
 
     const grants = await this.fetchFromRSSFeed()
     
-    console.log(`[v0] EU - Total opportunities loaded from RSS: ${grants.length}`)
-    return grants
+    // Filter out closed opportunities based on deadline date
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const activeGrants = grants.filter(grant => {
+      // If status is explicitly "Closed", exclude
+      if (grant.status === "Closed") return false
+      
+      // If deadline exists and is in the past, exclude
+      if (grant.deadline) {
+        const deadlineDate = new Date(grant.deadline)
+        if (!isNaN(deadlineDate.getTime()) && deadlineDate < today) {
+          return false
+        }
+      }
+      
+      return true
+    })
+    
+    console.log(`[v0] EU - Total: ${grants.length}, Active (Open/Forthcoming): ${activeGrants.length}`)
+    return activeGrants
   }
 
   /**
@@ -76,19 +95,44 @@ export class EUFundingFetcher {
         return grants
       }
 
-      // Parse ALL RSS items
+      // Parse RSS items - only get those with future deadlines or no deadline
       const items = this.parseRSSItems(xmlText)
-      console.log(`[v0] EU RSS - Found ${items.length} items in feed`)
+      console.log(`[v0] EU RSS - Found ${items.length} total items in feed`)
 
-      // Convert ALL items to grants - no filtering
+      // Today's date for quick filtering
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayStr = today.toISOString().split("T")[0]
+
+      // Convert items to grants - skip closed ones early
+      let skippedClosed = 0
       for (let i = 0; i < items.length; i++) {
+        // Quick check for closed status in description before full parsing
+        const descLower = (items[i].description || "").toLowerCase()
+        
+        // Quick deadline extraction to skip obviously closed items
+        const deadlineMatch = items[i].description.match(/<b>Deadline<\/b>:\s*([^<\n]+)/i)
+        if (deadlineMatch) {
+          const deadlineStr = this.formatDate(deadlineMatch[1].trim())
+          if (deadlineStr && deadlineStr < todayStr) {
+            skippedClosed++
+            continue // Skip items with past deadlines
+          }
+        }
+        
+        // Skip if explicitly marked as closed
+        if (descLower.includes("closed") && !descLower.includes("not closed")) {
+          skippedClosed++
+          continue
+        }
+        
         const grant = this.parseRSSItem(items[i], i)
         if (grant) {
           grants.push(grant)
         }
       }
 
-      console.log(`[v0] EU RSS - Successfully parsed ${grants.length} grants`)
+      console.log(`[v0] EU RSS - Parsed ${grants.length} active grants (skipped ${skippedClosed} closed)`)
 
     } catch (error) {
       console.log(`[v0] EU RSS - Error:`, error instanceof Error ? error.message : error)
@@ -203,13 +247,33 @@ export class EUFundingFetcher {
       // Categorize based on pillar or content
       const category = this.categorizeGrant(item.title, structuredData.pillar || description)
 
-      // Determine status from latest info
+      // Determine status based on dates and latest info
       let status = "Open"
       const latestLower = (structuredData.latestInfo || "").toLowerCase()
-      if (latestLower.includes("closed") || latestLower.includes("evaluation")) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      // Check if explicitly closed in latest info
+      if (latestLower.includes("closed") || latestLower.includes("evaluation") || latestLower.includes("evaluated")) {
         status = "Closed"
-      } else if (latestLower.includes("forthcoming") || latestLower.includes("upcoming")) {
-        status = "Forthcoming"
+      } 
+      // Check if deadline has passed
+      else if (deadline) {
+        const deadlineDate = new Date(deadline)
+        if (!isNaN(deadlineDate.getTime()) && deadlineDate < today) {
+          status = "Closed"
+        }
+      }
+      // Check if forthcoming (opening date in future or explicitly stated)
+      if (status !== "Closed") {
+        if (latestLower.includes("forthcoming") || latestLower.includes("upcoming")) {
+          status = "Forthcoming"
+        } else if (openingDate) {
+          const openDate = new Date(openingDate)
+          if (!isNaN(openDate.getTime()) && openDate > today) {
+            status = "Forthcoming"
+          }
+        }
       }
 
       return {

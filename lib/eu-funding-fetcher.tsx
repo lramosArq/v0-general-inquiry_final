@@ -28,8 +28,8 @@ export interface EUGrant {
 }
 
 export class EUFundingFetcher {
-  // Main RSS feed - contains all opportunities (correct URL from EC Europa)
-  private readonly RSS_URL = "https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/grantsTenders.rss"
+  // Main RSS feed - the correct working URL provided by user
+  private readonly RSS_URL = "https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/callupdates-rss.xml"
   
   /**
    * Fetch grants - filters for Open and Forthcoming during parsing

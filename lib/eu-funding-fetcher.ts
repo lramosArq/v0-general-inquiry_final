@@ -245,7 +245,7 @@ export class EUFundingFetcher {
       }
 
       // Clean description - remove HTML and entities
-      const cleanDescription = (item.description || item.title)
+      const rawDescription = (item.description || item.title)
         .replace(/<[^>]*>/g, " ")
         .replace(/&nbsp;/g, " ")
         .replace(/&amp;/g, "&")
@@ -256,6 +256,9 @@ export class EUFundingFetcher {
         .replace(/&#\d+;/g, "")
         .replace(/\s+/g, " ")
         .trim()
+      
+      // Generate a useful summary description (2-3 lines max)
+      const cleanDescription = this.generateSummaryDescription(rawDescription, item.title, callIdentifier)
 
       // Extract budget/amount with multiple patterns
       let amount = ""
@@ -290,7 +293,7 @@ export class EUFundingFetcher {
         amount,
         budget: amount,
         category,
-        description: cleanDescription.substring(0, 1000),
+        description: cleanDescription,
         expedient,
         callIdentifier: callIdentifier || undefined,
         topicIdentifier: topicIdentifier || undefined,
@@ -304,6 +307,70 @@ export class EUFundingFetcher {
     } catch {
       return null
     }
+  }
+
+  /**
+   * Generate a concise summary description (2-3 lines) from raw RSS content
+   * Extracts key information: what the opportunity is about, who can apply, and key focus areas
+   */
+  private generateSummaryDescription(rawText: string, title: string, callId: string): string {
+    if (!rawText || rawText.length < 20) {
+      return title || "EU funding opportunity. Visit the portal for full details."
+    }
+
+    // Remove common RSS boilerplate text
+    let text = rawText
+      .replace(/click here|read more|more information|visit the portal|for more details/gi, "")
+      .replace(/\s+/g, " ")
+      .trim()
+
+    // If text is very short, use it as is
+    if (text.length < 150) {
+      return text
+    }
+
+    // Try to extract the first meaningful sentence(s)
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20)
+    
+    if (sentences.length === 0) {
+      return text.substring(0, 200).trim() + "..."
+    }
+
+    // Build summary from first 1-2 meaningful sentences (targeting ~200 chars)
+    let summary = ""
+    for (const sentence of sentences) {
+      const cleaned = sentence.trim()
+      if (cleaned.length < 15) continue
+      
+      // Skip sentences that are just metadata
+      if (/^(deadline|status|budget|call|topic|open|closed|published)/i.test(cleaned)) continue
+      
+      if (summary.length === 0) {
+        summary = cleaned
+      } else if (summary.length + cleaned.length < 250) {
+        summary += ". " + cleaned
+      } else {
+        break
+      }
+    }
+
+    // Ensure summary ends properly
+    if (summary.length > 0) {
+      summary = summary.trim()
+      if (!summary.endsWith(".") && !summary.endsWith("!") && !summary.endsWith("?")) {
+        summary += "."
+      }
+    } else {
+      summary = text.substring(0, 200).trim() + "..."
+    }
+
+    // Add programme context if available and not already in summary
+    const program = this.extractProgramFromText(callId || title)
+    if (program && program !== "EU Funding & Tenders" && !summary.toUpperCase().includes(program.toUpperCase())) {
+      summary = `[${program}] ${summary}`
+    }
+
+    return summary.substring(0, 300)
   }
 
   /**

@@ -99,7 +99,6 @@ export class EUFundingFetcher {
 
   /**
    * Fetch grants by status (open, forthcoming, closed)
-   * Uses multipart/form-data format required by SEDIA API
    */
   private async fetchByStatus(status: "open" | "forthcoming" | "closed"): Promise<EUGrant[]> {
     const grants: EUGrant[] = []
@@ -109,7 +108,10 @@ export class EUFundingFetcher {
     
     while (hasMore) {
       try {
-        // Build URL with query parameters
+        // Build query body (complex filter only)
+        const queryBody = this.buildQuery(status)
+        
+        // All basic params MUST be in query string
         const params = new URLSearchParams({
           apiKey: this.API_KEY,
           text: "*",
@@ -119,41 +121,17 @@ export class EUFundingFetcher {
         
         const url = `${this.API_URL}?${params.toString()}`
         
-        // Build query object
-        const query = {
-          bool: {
-            must: [
-              {
-                terms: {
-                  type: ["1", "2", "8"] // 1=Call for proposals, 2=Call for tenders, 8=Topics
-                }
-              },
-              {
-                terms: {
-                  status: [this.mapStatus(status)]
-                }
-              }
-            ]
-          }
-        }
-        
-        const languages = ["en"]
-        const sort = { field: "sortStatus", order: "DESC" }
-        
-        // Create FormData with blobs (multipart/form-data format)
-        const formData = new FormData()
-        formData.append("query", new Blob([JSON.stringify(query)], { type: "application/json" }))
-        formData.append("languages", new Blob([JSON.stringify(languages)], { type: "application/json" }))
-        formData.append("sort", new Blob([JSON.stringify(sort)], { type: "application/json" }))
-        
         const response = await fetch(url, {
           method: "POST",
-          body: formData,
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify(queryBody),
         })
         
         if (!response.ok) {
-          const errorText = await response.text()
-          console.log(`[v0] EU API - HTTP ${response.status} for ${status} page ${page}: ${errorText.substring(0, 200)}`)
+          console.log(`[v0] EU API - HTTP ${response.status} for ${status} page ${page}`)
           break
         }
         
@@ -191,6 +169,37 @@ export class EUFundingFetcher {
     }
     
     return grants
+  }
+
+  /**
+   * Build SEDIA API query body
+   * Note: apiKey, text, pageSize, pageNumber go in query string
+   * Only the complex query filter goes in the body
+   */
+  private buildQuery(status: string): object {
+    return {
+      sort: {
+        field: "sortStatus",
+        order: "DESC"
+      },
+      languages: ["en"],
+      query: {
+        bool: {
+          must: [
+            {
+              terms: {
+                type: ["1", "2", "8"] // 1=Call for proposals, 2=Call for tenders, 8=Topics
+              }
+            },
+            {
+              terms: {
+                status: [this.mapStatus(status)]
+              }
+            }
+          ]
+        }
+      }
+    }
   }
 
   /**

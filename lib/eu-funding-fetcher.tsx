@@ -57,10 +57,17 @@ export class EUFundingFetcher {
     const todayStr = today.toISOString().split("T")[0]
     
     try {
+      // Add timeout with AbortController (45 seconds max)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 45000)
+      
       const response = await fetch(url, {
         headers: { "Accept": "application/rss+xml, application/xml, text/xml" },
+        signal: controller.signal,
         next: { revalidate: 1800 } // Cache for 30 minutes
       })
+      
+      clearTimeout(timeoutId)
       
       if (!response.ok) {
         console.log(`[v0] EU RSS - HTTP ${response.status}`)
@@ -154,7 +161,11 @@ export class EUFundingFetcher {
       console.log(`[v0] EU RSS - Open: ${openCount}, Forthcoming: ${forthcomingCount}, Closed: ${closedCount}, NoDeadline/Skipped: ${noDeadlineCount}`)
       
     } catch (error) {
-      console.log(`[v0] EU RSS - Error:`, error instanceof Error ? error.message : error)
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("[v0] EU RSS - Request timed out after 45s, returning partial results")
+      } else {
+        console.log(`[v0] EU RSS - Error:`, error instanceof Error ? error.message : error)
+      }
     }
     
     return grants

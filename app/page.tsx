@@ -545,15 +545,28 @@ export default function GrantsSearchPage() {
   const applyFilters = () => {
     let filtered = [...grants]
 
+    console.log("[v0] applyFilters called - sourceFilter:", JSON.stringify(sourceFilter))
+    console.log("[v0] Total grants before filter:", filtered.length)
+    
     // Source filter
     if (!sourceFilter.all) {
       const enabledSources: string[] = []
       if (sourceFilter.usa) enabledSources.push("usa")
       if (sourceFilter.eu) enabledSources.push("eu")
       if (sourceFilter.spain) enabledSources.push("spain")
+      if (sourceFilter.other) enabledSources.push("other")
+      console.log("[v0] Enabled sources:", enabledSources)
       if (enabledSources.length > 0) {
+        const beforeCount = filtered.length
         filtered = filtered.filter((g) => enabledSources.includes(g.source))
+        console.log("[v0] After source filter:", filtered.length, "(removed", beforeCount - filtered.length, ")")
+        // Log a sample of remaining grants
+        if (filtered.length > 0) {
+          console.log("[v0] Sample grant sources:", filtered.slice(0, 5).map(g => ({ id: g.id, source: g.source })))
+        }
       }
+    } else {
+      console.log("[v0] sourceFilter.all is true - no source filtering")
     }
 
     // Prompt search (natural language - searches across all text fields)

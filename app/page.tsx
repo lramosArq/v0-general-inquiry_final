@@ -1108,14 +1108,24 @@ export default function GrantsSearchPage() {
                                 defense: false,
                               })
                               if (key === "all") {
-                                setSourceFilter({ all: true, usa: false, eu: false, spain: false })
+                                setSourceFilter({ all: true, usa: false, eu: false, spain: false, other: false })
                               } else {
-                                setSourceFilter((prev) => ({
-                                  all: false,
-                                  usa: key === "usa" ? !!checked : prev.usa && key !== "usa" ? prev.usa : false,
-                                  eu: key === "eu" ? !!checked : prev.eu && key !== "eu" ? prev.eu : false,
-                                  spain: key === "spain" ? !!checked : prev.spain && key !== "spain" ? prev.spain : false,
-                                }))
+                                // When selecting a specific region, update that region's checkbox
+                                // and keep other regions as they were (multi-select behavior)
+                                setSourceFilter((prev) => {
+                                  const newFilter = {
+                                    all: false,
+                                    usa: key === "usa" ? !!checked : prev.usa,
+                                    eu: key === "eu" ? !!checked : prev.eu,
+                                    spain: key === "spain" ? !!checked : prev.spain,
+                                    other: key === "other" ? !!checked : prev.other,
+                                  }
+                                  // If no specific region selected, default back to all
+                                  if (!newFilter.usa && !newFilter.eu && !newFilter.spain && !newFilter.other) {
+                                    return { all: true, usa: false, eu: false, spain: false, other: false }
+                                  }
+                                  return newFilter
+                                })
                               }
                             }}
                           />

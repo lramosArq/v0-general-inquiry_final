@@ -473,9 +473,19 @@ export default function GrantsSearchPage() {
 
       if (response.ok) {
         const result = await response.json()
-      const fetchedGrants = result.grants || []
-        setGrants(fetchedGrants)
-        setFilteredGrants(fetchedGrants)
+        const fetchedGrants = result.grants || []
+        
+        // Deduplicate grants by ID to prevent duplicate key warnings
+        const uniqueGrantsMap = new Map<string, typeof fetchedGrants[0]>()
+        for (const grant of fetchedGrants) {
+          if (!uniqueGrantsMap.has(grant.id)) {
+            uniqueGrantsMap.set(grant.id, grant)
+          }
+        }
+        const uniqueGrants = Array.from(uniqueGrantsMap.values())
+        
+        setGrants(uniqueGrants)
+        setFilteredGrants(uniqueGrants)
       } else {
         console.error("[v0] API Error:", response.status)
       }
@@ -544,9 +554,6 @@ export default function GrantsSearchPage() {
 
   const applyFilters = () => {
     let filtered = [...grants]
-
-    console.log("[v0] applyFilters called - sourceFilter:", JSON.stringify(sourceFilter))
-    console.log("[v0] Total grants before filter:", filtered.length)
     
     // Source filter
     if (!sourceFilter.all) {
@@ -555,18 +562,9 @@ export default function GrantsSearchPage() {
       if (sourceFilter.eu) enabledSources.push("eu")
       if (sourceFilter.spain) enabledSources.push("spain")
       if (sourceFilter.other) enabledSources.push("other")
-      console.log("[v0] Enabled sources:", enabledSources)
       if (enabledSources.length > 0) {
-        const beforeCount = filtered.length
         filtered = filtered.filter((g) => enabledSources.includes(g.source))
-        console.log("[v0] After source filter:", filtered.length, "(removed", beforeCount - filtered.length, ")")
-        // Log a sample of remaining grants
-        if (filtered.length > 0) {
-          console.log("[v0] Sample grant sources:", filtered.slice(0, 5).map(g => ({ id: g.id, source: g.source })))
-        }
       }
-    } else {
-      console.log("[v0] sourceFilter.all is true - no source filtering")
     }
 
     // Prompt search (natural language - searches across all text fields)

@@ -184,13 +184,15 @@ export async function POST(request: NextRequest) {
     if (!source || source === "all" || source === "eu") {
       try {
         const euFetcher = new EUFundingFetcher()
-        const euGrants = await euFetcher.fetchAllGrants(keyword)
+        const euGrants = await euFetcher.fetchAllGrants()
         const filteredEu = euGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
         const mappedEuGrants = filteredEu.map((g) => mapGrantToFrontend(g, "eu"))
         allGrants.push(...mappedEuGrants)
         console.log(`[v0] EU grants fetched: ${filteredEu.length}`)
       } catch (error) {
-        console.error("[v0] Error fetching EU grants:", error)
+        // Don't fail the whole request if EU times out or errors
+        const errMsg = error instanceof Error ? error.message : String(error)
+        console.error("[v0] Error fetching EU grants (continuing):", errMsg)
       }
     }
 

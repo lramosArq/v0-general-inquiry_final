@@ -473,9 +473,19 @@ export default function GrantsSearchPage() {
 
       if (response.ok) {
         const result = await response.json()
-      const fetchedGrants = result.grants || []
-        setGrants(fetchedGrants)
-        setFilteredGrants(fetchedGrants)
+        const fetchedGrants = result.grants || []
+        
+        // Deduplicate grants by ID to prevent duplicate key warnings
+        const uniqueGrantsMap = new Map<string, typeof fetchedGrants[0]>()
+        for (const grant of fetchedGrants) {
+          if (!uniqueGrantsMap.has(grant.id)) {
+            uniqueGrantsMap.set(grant.id, grant)
+          }
+        }
+        const uniqueGrants = Array.from(uniqueGrantsMap.values())
+        
+        setGrants(uniqueGrants)
+        setFilteredGrants(uniqueGrants)
       } else {
         console.error("[v0] API Error:", response.status)
       }
@@ -544,13 +554,14 @@ export default function GrantsSearchPage() {
 
   const applyFilters = () => {
     let filtered = [...grants]
-
+    
     // Source filter
     if (!sourceFilter.all) {
       const enabledSources: string[] = []
       if (sourceFilter.usa) enabledSources.push("usa")
       if (sourceFilter.eu) enabledSources.push("eu")
       if (sourceFilter.spain) enabledSources.push("spain")
+      if (sourceFilter.other) enabledSources.push("other")
       if (enabledSources.length > 0) {
         filtered = filtered.filter((g) => enabledSources.includes(g.source))
       }
@@ -1108,14 +1119,24 @@ export default function GrantsSearchPage() {
                                 defense: false,
                               })
                               if (key === "all") {
-                                setSourceFilter({ all: true, usa: false, eu: false, spain: false })
+                                setSourceFilter({ all: true, usa: false, eu: false, spain: false, other: false })
                               } else {
-                                setSourceFilter((prev) => ({
-                                  all: false,
-                                  usa: key === "usa" ? !!checked : prev.usa && key !== "usa" ? prev.usa : false,
-                                  eu: key === "eu" ? !!checked : prev.eu && key !== "eu" ? prev.eu : false,
-                                  spain: key === "spain" ? !!checked : prev.spain && key !== "spain" ? prev.spain : false,
-                                }))
+                                // When selecting a specific region, update that region's checkbox
+                                // and keep other regions as they were (multi-select behavior)
+                                setSourceFilter((prev) => {
+                                  const newFilter = {
+                                    all: false,
+                                    usa: key === "usa" ? !!checked : prev.usa,
+                                    eu: key === "eu" ? !!checked : prev.eu,
+                                    spain: key === "spain" ? !!checked : prev.spain,
+                                    other: key === "other" ? !!checked : prev.other,
+                                  }
+                                  // If no specific region selected, default back to all
+                                  if (!newFilter.usa && !newFilter.eu && !newFilter.spain && !newFilter.other) {
+                                    return { all: true, usa: false, eu: false, spain: false, other: false }
+                                  }
+                                  return newFilter
+                                })
                               }
                             }}
                           />

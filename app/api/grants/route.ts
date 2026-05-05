@@ -125,7 +125,7 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { keyword, source, blocklist, enabledSources } = body
+    const { keyword, source, blocklist, enabledSources, spainConfig, euConfig, usaConfig } = body
 
     // Merge dynamic blocklist with defaults
     const blockedIds = [...DEFAULT_BLOCKED_IDS, ...(blocklist?.ids || [])]
@@ -139,6 +139,14 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Endpoint /api/grants - Fetching grants")
     console.log(`[v0] Keyword: "${keyword || "all"}", Source: "${source || "all"}", Blocklist: ${blockedIds.length} IDs, ${blockedKeywords.length} keywords`)
     console.log(`[v0] Enabled sources - USA: ${usaEnabled}, EU: ${euEnabled}, Spain: ${spainEnabled}`)
+    
+    // Log Spain config for debugging
+    if (spainConfig) {
+      const enabledPortals = Object.entries(spainConfig.portals || {})
+        .filter(([_, enabled]) => enabled)
+        .map(([name]) => name)
+      console.log(`[v0] Spain config - portals: ${enabledPortals.join(", ") || "none"}, keywords: ${spainConfig.keywords?.length || 0}`)
+    }
 
     const allGrants: any[] = []
 
@@ -204,10 +212,10 @@ export async function POST(request: NextRequest) {
 
     // Spain grants (BDNS, CDTI, AEI, PRTR, etc.)
     if (spainEnabled && (!source || source === "all" || source === "spain")) {
-      // BDNS subsidies
+      // BDNS subsidies - pass config to filter by portals and keywords
       try {
         const spainFetcher = new SpainGrantsFetcher()
-        const spainGrants = await spainFetcher.fetchAllGrants(keyword)
+        const spainGrants = await spainFetcher.fetchAllGrants(keyword, spainConfig)
         const filteredSpain = spainGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
         const mappedSpainGrants = filteredSpain.map((g) => mapGrantToFrontend(g, "spain"))
         allGrants.push(...mappedSpainGrants)

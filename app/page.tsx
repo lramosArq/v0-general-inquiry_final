@@ -475,6 +475,10 @@ export default function GrantsSearchPage() {
           source: "all",
           blocklist: savedApiConfig?.blocklist,
           enabledSources,
+          // Pass detailed config for each source
+          spainConfig: savedApiConfig?.spain,
+          euConfig: savedApiConfig?.eu,
+          usaConfig: savedApiConfig?.sam,
         }),
       })
 

@@ -27,24 +27,87 @@ const ARQUIMEA_ES_KEYWORDS = [
   "i+d", "tecnologia", "investigacion", "cdti", "inta"
 ]
 
+// Interface for Spain config from API Connections
+interface SpainConfig {
+  enabled: boolean
+  keywords: string[]
+  portals: {
+    bdns: boolean
+    cdti: boolean
+    aei: boolean
+    prtr: boolean
+    mincotur: boolean
+    miciu: boolean
+    ayudatec: boolean
+    oepm: boolean
+    minEconomia: boolean
+    ipyme: boolean
+    comunidadMadrid: boolean
+    canarias: boolean
+  }
+  categories: {
+    idi: boolean
+    digitalizacion: boolean
+    internacionalizacion: boolean
+    propiedadIndustrial: boolean
+    emprendimiento: boolean
+    sostenibilidad: boolean
+  }
+}
+
 export class SpainGrantsFetcher {
   private matchesArquimeaTechMap(title: string, description: string): boolean {
     const text = `${title} ${description}`.toLowerCase()
     return ARQUIMEA_ES_KEYWORDS.some(keyword => text.includes(keyword))
   }
 
-  async fetchAllGrants(keyword?: string): Promise<SpainGrant[]> {
+  private matchesConfigKeywords(title: string, description: string, keywords: string[]): boolean {
+    if (!keywords || keywords.length === 0) return true // No keywords = match all
+    const text = `${title} ${description}`.toLowerCase()
+    return keywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()))
+  }
+
+  async fetchAllGrants(keyword?: string, config?: SpainConfig): Promise<SpainGrant[]> {
     console.log("[v0] Spain - Fetching real grants from Spanish sources...")
+    
+    // Check if any portal is enabled in config
+    const portals = config?.portals
+    const bdnsEnabled = portals?.bdns !== false // Default to true if not specified
+    const configKeywords = config?.keywords || []
+    
+    // Log config for debugging
+    if (config) {
+      const enabledPortals = Object.entries(portals || {})
+        .filter(([_, enabled]) => enabled)
+        .map(([name]) => name)
+      console.log(`[v0] Spain config - BDNS: ${bdnsEnabled}, keywords: ${configKeywords.length}`)
+      console.log(`[v0] Spain enabled portals: ${enabledPortals.join(", ") || "none specified (defaults apply)"}`)
+    }
 
     const allGrants: SpainGrant[] = []
 
-    // Add verified BDNS grants (manually verified from infosubvenciones.es)
-    // Note: BDNS API requires authentication, so we use manually verified data
-    const verifiedBdnsGrants = this.getVerifiedBDNSGrants()
-    allGrants.push(...verifiedBdnsGrants)
-    console.log(`[v0] Spain BDNS - Added ${verifiedBdnsGrants.length} verified grants`)
+    // Only add BDNS grants if BDNS portal is enabled
+    if (bdnsEnabled) {
+      // Add verified BDNS grants (manually verified from infosubvenciones.es)
+      // Note: BDNS API requires authentication, so we use manually verified data
+      let verifiedBdnsGrants = this.getVerifiedBDNSGrants()
+      
+      // Filter by config keywords if provided
+      if (configKeywords.length > 0) {
+        verifiedBdnsGrants = verifiedBdnsGrants.filter(g => 
+          this.matchesConfigKeywords(g.title, g.description, configKeywords)
+        )
+        console.log(`[v0] Spain BDNS - Filtered to ${verifiedBdnsGrants.length} grants matching keywords`)
+      }
+      
+      allGrants.push(...verifiedBdnsGrants)
+      console.log(`[v0] Spain BDNS - Added ${verifiedBdnsGrants.length} verified grants`)
+    } else {
+      console.log("[v0] Spain BDNS - Disabled in config, skipping")
+    }
 
     // Try PLACSP (Portal de Contratacion del Sector Publico)
+    // PLACSP is always included when Spain is enabled (it's the main public tender portal)
     try {
       const placspGrants = await this.fetchFromPLACSP(keyword)
       allGrants.push(...placspGrants)

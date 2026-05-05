@@ -450,16 +450,22 @@ export default function GrantsSearchPage() {
     setIsLoading(true)
     try {
   
-      // Load saved blocklist config
-      let blocklist: { ids: string[]; keywords: string[] } | undefined
+      // Load saved config including enabled sources and blocklist
+      let savedApiConfig: APIConfig | null = null
       try {
-        const savedConfig = localStorage.getItem("apiConfig")
-        if (savedConfig) {
-          const parsed = JSON.parse(savedConfig)
-          blocklist = parsed.blocklist
-          if (!apiConfig) setApiConfig(parsed)
+        const savedConfigStr = localStorage.getItem("apiConfig")
+        if (savedConfigStr) {
+          savedApiConfig = JSON.parse(savedConfigStr)
+          if (!apiConfig) setApiConfig(savedApiConfig)
         }
       } catch { /* ignore */ }
+
+      // Build enabled sources based on config
+      const enabledSources = {
+        usa: savedApiConfig?.sam?.enabled ?? true,
+        eu: savedApiConfig?.eu?.enabled ?? true,
+        spain: savedApiConfig?.spain?.enabled ?? true,
+      }
 
       const response = await fetch("/api/grants", {
         method: "POST",
@@ -467,7 +473,12 @@ export default function GrantsSearchPage() {
         body: JSON.stringify({
           keyword: "all",
           source: "all",
-          blocklist,
+          blocklist: savedApiConfig?.blocklist,
+          enabledSources,
+          // Pass detailed config for each source
+          spainConfig: savedApiConfig?.spain,
+          euConfig: savedApiConfig?.eu,
+          usaConfig: savedApiConfig?.sam,
         }),
       })
 

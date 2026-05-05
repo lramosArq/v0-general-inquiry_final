@@ -125,18 +125,32 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { keyword, source, blocklist } = body
+    const { keyword, source, blocklist, enabledSources, spainConfig, euConfig, usaConfig } = body
 
     // Merge dynamic blocklist with defaults
     const blockedIds = [...DEFAULT_BLOCKED_IDS, ...(blocklist?.ids || [])]
     const blockedKeywords = [...DEFAULT_BLOCKED_KEYWORDS, ...(blocklist?.keywords || [])]
 
+    // Check which sources are enabled (default to all enabled if not specified)
+    const usaEnabled = enabledSources?.usa !== false
+    const euEnabled = enabledSources?.eu !== false
+    const spainEnabled = enabledSources?.spain !== false
+
     console.log("[v0] Endpoint /api/grants - Fetching grants")
     console.log(`[v0] Keyword: "${keyword || "all"}", Source: "${source || "all"}", Blocklist: ${blockedIds.length} IDs, ${blockedKeywords.length} keywords`)
+    console.log(`[v0] Enabled sources - USA: ${usaEnabled}, EU: ${euEnabled}, Spain: ${spainEnabled}`)
+    
+    // Log Spain config for debugging
+    if (spainConfig) {
+      const enabledPortals = Object.entries(spainConfig.portals || {})
+        .filter(([_, enabled]) => enabled)
+        .map(([name]) => name)
+      console.log(`[v0] Spain config - portals: ${enabledPortals.join(", ") || "none"}, keywords: ${spainConfig.keywords?.length || 0}`)
+    }
 
     const allGrants: any[] = []
 
-    if (!source || source === "all" || source === "usa") {
+    if (usaEnabled && (!source || source === "all" || source === "usa")) {
       // Grants.gov (public, no key)
       try {
         const usaFetcher = new GrantsGovFetcher()
@@ -181,7 +195,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!source || source === "all" || source === "eu") {
+    if (euEnabled && (!source || source === "all" || source === "eu")) {
       try {
         const euFetcher = new EUFundingFetcher()
         const euGrants = await euFetcher.fetchAllGrants()
@@ -197,11 +211,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Spain grants (BDNS, CDTI, AEI, PRTR, etc.)
-    if (!source || source === "all" || source === "spain") {
-      // BDNS subsidies
+    if (spainEnabled && (!source || source === "all" || source === "spain")) {
+      // BDNS subsidies - pass config to filter by portals and keywords
       try {
         const spainFetcher = new SpainGrantsFetcher()
-        const spainGrants = await spainFetcher.fetchAllGrants(keyword)
+        const spainGrants = await spainFetcher.fetchAllGrants(keyword, spainConfig)
         const filteredSpain = spainGrants.filter((g) => !isBlockedGrant(g, blockedIds, blockedKeywords))
         const mappedSpainGrants = filteredSpain.map((g) => mapGrantToFrontend(g, "spain"))
         allGrants.push(...mappedSpainGrants)
@@ -251,10 +265,16 @@ export async function POST(request: NextRequest) {
         status: samKeyConfigured ? "active" : "unconfigured", 
         note: samKeyConfigured ? "API con clave - datos reales" : "Requiere SAM_GOV_API_KEY" 
       },
-      euFunding: { name: "EU Funding Portal", status: "limited", note: "API SEDIA/TED - datos reales si disponibles" },
+      euFunding: { name: "EU Funding Portal", status: "active", note: "API SEDIA - Open & Forthcoming topics" },
       spainBdns: { name: "BDNS (Spain)", status: "limited", note: "API REST - datos reales si disponibles" },
       spainPlacsp: { name: "PLACSP (Spain)", status: "active", note: "Feed Atom - datos reales" },
     }
+    
+    // Log final counts by source
+    const usaCount = allGrants.filter((g) => g.source === "usa").length
+    const euCount = allGrants.filter((g) => g.source === "eu").length
+    const spainCount = allGrants.filter((g) => g.source === "spain").length
+    console.log(`[v0] Final counts - USA: ${usaCount}, EU: ${euCount}, Spain: ${spainCount}, Total: ${allGrants.length}`)
 
     return NextResponse.json({
       success: true,

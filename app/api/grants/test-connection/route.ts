@@ -151,44 +151,68 @@ async function testEuConnection(config: any) {
     const euFetcher = new EUFundingFetcher()
     const allGrants = await euFetcher.fetchAllGrants()
 
-    let filtered = allGrants
+    // Log sample grant structure for debugging
+    if (allGrants.length > 0) {
+      console.log("[v0] EU test - Sample grant structure:", JSON.stringify(allGrants[0], null, 2).slice(0, 500))
+    }
 
-    // Filter by keywords
-    if (config.keywords && config.keywords.length > 0) {
-      const kws = config.keywords.map((k: string) => k.toLowerCase())
-      filtered = filtered.filter((g: any) => {
-        const text = `${g.title} ${g.description} ${g.category}`.toLowerCase()
-        return kws.some((kw: string) => text.includes(kw))
+    // Use OR logic: a grant matches if it matches ANY of the enabled filters
+    // If no filters are configured, return all grants
+    const hasKeywords = config.keywords && config.keywords.length > 0
+    const hasPrefixes = config.topicPrefixes && config.topicPrefixes.length > 0
+    const hasProgrammes = config.programmes && (
+      config.programmes.horizonEurope || 
+      config.programmes.digitalEurope || 
+      config.programmes.euSpace ||
+      config.programmes.edf ||
+      config.programmes.edirpa ||
+      config.programmes.esa
+    )
+
+    // If no filters configured, return all
+    if (!hasKeywords && !hasPrefixes && !hasProgrammes) {
+      const sample = allGrants.slice(0, 5).map((g: any) => `${g.id || g.expedient}: ${g.title?.slice(0, 60)}...`)
+      return NextResponse.json({
+        success: true,
+        count: allGrants.length,
+        message: `Connected to EU Funding Portal. Found ${allGrants.length} open/forthcoming topics. No filters applied.`,
+        sample,
       })
     }
 
-    // Filter by programmes
-    if (config.programmes) {
-      filtered = filtered.filter((g: any) => {
-        const programme = (g.programme || g.organization || "").toLowerCase()
-        if (config.programmes.horizonEurope && programme.includes("horizon")) return true
-        if (config.programmes.digitalEurope && programme.includes("digital")) return true
-        if (config.programmes.euSpace && programme.includes("space")) return true
-        // If no programme filter is enabled, show all
-        if (!config.programmes.horizonEurope && !config.programmes.digitalEurope && !config.programmes.euSpace) return true
-        return false
-      })
-    }
+    // Filter using OR logic - grant matches if ANY filter matches
+    const filtered = allGrants.filter((g: any) => {
+      const text = `${g.title || ""} ${g.description || ""} ${g.category || ""} ${g.programme || ""} ${g.organization || ""}`.toLowerCase()
+      const id = (g.id || g.expedient || "").toLowerCase()
 
-    // Filter by topic prefixes
-    if (config.topicPrefixes && config.topicPrefixes.length > 0) {
-      const prefixes = config.topicPrefixes.map((p: string) => p.toLowerCase())
-      const prefixFiltered = filtered.filter((g: any) => {
-        const id = (g.id || g.expedient || "").toLowerCase()
-        return prefixes.some((p: string) => id.startsWith(p))
-      })
-      // Only apply prefix filter if it yields results (otherwise keep all)
-      if (prefixFiltered.length > 0) {
-        filtered = prefixFiltered
+      // Check keywords (OR within keywords)
+      if (hasKeywords) {
+        const kws = config.keywords.map((k: string) => k.toLowerCase())
+        if (kws.some((kw: string) => text.includes(kw))) return true
       }
-    }
 
-    const sample = filtered.slice(0, 5).map((g: any) => `${g.id || g.expedient}: ${g.title}`)
+      // Check topic prefixes (OR within prefixes)
+      if (hasPrefixes) {
+        const prefixes = config.topicPrefixes.map((p: string) => p.toLowerCase())
+        if (prefixes.some((p: string) => id.includes(p) || text.includes(p))) return true
+      }
+
+      // Check programmes
+      if (hasProgrammes) {
+        if (config.programmes.horizonEurope && (text.includes("horizon") || id.includes("horizon"))) return true
+        if (config.programmes.digitalEurope && (text.includes("digital") || id.includes("digital"))) return true
+        if (config.programmes.euSpace && (text.includes("space") || id.includes("space"))) return true
+        if (config.programmes.edf && (text.includes("defence") || text.includes("defense") || id.includes("edf"))) return true
+        if (config.programmes.edirpa && (text.includes("edirpa") || text.includes("asap") || text.includes("edip"))) return true
+        if (config.programmes.esa && (text.includes("esa") || text.includes("european space agency"))) return true
+      }
+
+      return false
+    })
+
+    console.log(`[v0] EU test - Total: ${allGrants.length}, Filtered: ${filtered.length}`)
+
+    const sample = filtered.slice(0, 5).map((g: any) => `${g.id || g.expedient}: ${g.title?.slice(0, 60)}...`)
 
     return NextResponse.json({
       success: true,
@@ -197,6 +221,7 @@ async function testEuConnection(config: any) {
       sample,
     })
   } catch (error) {
+    console.error("[v0] EU test error:", error)
     return NextResponse.json({
       success: false,
       count: 0,

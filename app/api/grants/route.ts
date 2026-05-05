@@ -265,10 +265,16 @@ export async function POST(request: NextRequest) {
         status: samKeyConfigured ? "active" : "unconfigured", 
         note: samKeyConfigured ? "API con clave - datos reales" : "Requiere SAM_GOV_API_KEY" 
       },
-      euFunding: { name: "EU Funding Portal", status: "limited", note: "API SEDIA/TED - datos reales si disponibles" },
+      euFunding: { name: "EU Funding Portal", status: "active", note: "API SEDIA - Open & Forthcoming topics" },
       spainBdns: { name: "BDNS (Spain)", status: "limited", note: "API REST - datos reales si disponibles" },
       spainPlacsp: { name: "PLACSP (Spain)", status: "active", note: "Feed Atom - datos reales" },
     }
+    
+    // Log final counts by source
+    const usaCount = allGrants.filter((g) => g.source === "usa").length
+    const euCount = allGrants.filter((g) => g.source === "eu").length
+    const spainCount = allGrants.filter((g) => g.source === "spain").length
+    console.log(`[v0] Final counts - USA: ${usaCount}, EU: ${euCount}, Spain: ${spainCount}, Total: ${allGrants.length}`)
 
     return NextResponse.json({
       success: true,

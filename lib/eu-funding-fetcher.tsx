@@ -193,15 +193,30 @@ export class EUFundingFetcher {
       // Get title
       const title = metadata.title?.[0] || content.substring(0, 100) || identifier
       
-      // Get dates - IMPORTANT: deadline comes from deadlineDate (closing), openingDate is when it opens
-      // The API returns timestamps in milliseconds
-      const rawDeadline = metadata.deadlineDate?.[0] || metadata.deadline?.[0]
-      const rawOpening = metadata.openingDate?.[0] || metadata.startDate?.[0]
-      const rawPublish = metadata.publicationDate?.[0]
-      
-      const deadline = this.parseApiDate(rawDeadline)
-      const openingDate = this.parseApiDate(rawOpening)
-      const publishDate = this.parseApiDate(rawPublish) || new Date().toISOString().split("T")[0]
+  // Get dates - IMPORTANT: deadline comes from deadlineDate (closing), openingDate is when it opens
+  // The API returns timestamps in milliseconds
+  const rawDeadline = metadata.deadlineDate?.[0] || metadata.deadline?.[0]
+  const rawOpening = metadata.openingDate?.[0] || metadata.startDate?.[0]
+  const rawPublish = metadata.publicationDate?.[0]
+  
+  // DEBUG: Log raw date values to understand API format
+  if (identifier && identifier.includes("HORIZON")) {
+    console.log(`[v0] EU Date Debug - ${identifier}:`)
+    console.log(`[v0]   Raw deadline: ${rawDeadline} (type: ${typeof rawDeadline})`)
+    console.log(`[v0]   Raw opening: ${rawOpening} (type: ${typeof rawOpening})`)
+    console.log(`[v0]   All deadline fields: deadlineDate=${metadata.deadlineDate?.[0]}, deadline=${metadata.deadline?.[0]}`)
+    console.log(`[v0]   All opening fields: openingDate=${metadata.openingDate?.[0]}, startDate=${metadata.startDate?.[0]}`)
+  }
+  
+  const deadline = this.parseApiDate(rawDeadline)
+  const openingDate = this.parseApiDate(rawOpening)
+  const publishDate = this.parseApiDate(rawPublish) || new Date().toISOString().split("T")[0]
+  
+  // DEBUG: Log parsed dates
+  if (identifier && identifier.includes("HORIZON")) {
+    console.log(`[v0]   Parsed deadline: ${deadline}`)
+    console.log(`[v0]   Parsed opening: ${openingDate}`)
+  }
       
       // Validate dates: deadline should be after openingDate
       // If dates seem wrong, try to fix them

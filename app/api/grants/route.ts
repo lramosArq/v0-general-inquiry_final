@@ -125,18 +125,24 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { keyword, source, blocklist } = body
+    const { keyword, source, blocklist, enabledSources } = body
 
     // Merge dynamic blocklist with defaults
     const blockedIds = [...DEFAULT_BLOCKED_IDS, ...(blocklist?.ids || [])]
     const blockedKeywords = [...DEFAULT_BLOCKED_KEYWORDS, ...(blocklist?.keywords || [])]
 
+    // Check which sources are enabled (default to all enabled if not specified)
+    const usaEnabled = enabledSources?.usa !== false
+    const euEnabled = enabledSources?.eu !== false
+    const spainEnabled = enabledSources?.spain !== false
+
     console.log("[v0] Endpoint /api/grants - Fetching grants")
     console.log(`[v0] Keyword: "${keyword || "all"}", Source: "${source || "all"}", Blocklist: ${blockedIds.length} IDs, ${blockedKeywords.length} keywords`)
+    console.log(`[v0] Enabled sources - USA: ${usaEnabled}, EU: ${euEnabled}, Spain: ${spainEnabled}`)
 
     const allGrants: any[] = []
 
-    if (!source || source === "all" || source === "usa") {
+    if (usaEnabled && (!source || source === "all" || source === "usa")) {
       // Grants.gov (public, no key)
       try {
         const usaFetcher = new GrantsGovFetcher()
@@ -181,7 +187,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!source || source === "all" || source === "eu") {
+    if (euEnabled && (!source || source === "all" || source === "eu")) {
       try {
         const euFetcher = new EUFundingFetcher()
         const euGrants = await euFetcher.fetchAllGrants()
@@ -197,7 +203,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Spain grants (BDNS, CDTI, AEI, PRTR, etc.)
-    if (!source || source === "all" || source === "spain") {
+    if (spainEnabled && (!source || source === "all" || source === "spain")) {
       // BDNS subsidies
       try {
         const spainFetcher = new SpainGrantsFetcher()

@@ -39,8 +39,17 @@ interface Grant {
 }
 
 export default function GrantsSearchPage() {
-  const [grants, setGrants] = useState<Grant[]>([])
+  // Separate grant sources: API Connections vs GPT-Sync
+  const [apiGrants, setApiGrants] = useState<Grant[]>([])           // From API Connections
+  const [gptSyncGrants, setGptSyncGrants] = useState<Grant[]>([])   // From GPT-Sync
+  const [grants, setGrants] = useState<Grant[]>([])                 // Combined (for compatibility)
   const [filteredGrants, setFilteredGrants] = useState<Grant[]>([])
+  const [filteredApiGrants, setFilteredApiGrants] = useState<Grant[]>([])
+  const [filteredGptSyncGrants, setFilteredGptSyncGrants] = useState<Grant[]>([])
+  
+  // Sub-tab for Search Grants: "api" or "gpt-sync"
+  const [grantsSubTab, setGrantsSubTab] = useState<"api" | "gpt-sync">("api")
+  
   const [isLoading, setIsLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [activeTab, setActiveTab] = useState("search")
@@ -495,6 +504,11 @@ export default function GrantsSearchPage() {
         }
         const uniqueGrants = Array.from(uniqueGrantsMap.values())
         
+        // Store in apiGrants (from API Connections)
+        setApiGrants(uniqueGrants)
+        setFilteredApiGrants(uniqueGrants)
+        
+        // Also update combined grants for compatibility
         setGrants(uniqueGrants)
         setFilteredGrants(uniqueGrants)
       } else {
@@ -563,8 +577,9 @@ export default function GrantsSearchPage() {
     } catch { /* ignore */ }
   }
 
-  const applyFilters = () => {
-    let filtered = [...grants]
+  // Helper function to apply filters to a grant array
+  const applyFiltersToArray = (grantsArray: Grant[]): Grant[] => {
+    let filtered = [...grantsArray]
     
     // Source filter
     if (!sourceFilter.all) {
@@ -733,7 +748,23 @@ export default function GrantsSearchPage() {
       }
     })
 
-    setFilteredGrants(filtered)
+    return filtered
+  }
+  
+  // Main applyFilters function that applies to all sources
+  const applyFilters = () => {
+    // Apply filters to API grants
+    const filteredApi = applyFiltersToArray(apiGrants)
+    setFilteredApiGrants(filteredApi)
+    
+    // Apply filters to GPT-Sync grants
+    const filteredGpt = applyFiltersToArray(gptSyncGrants)
+    setFilteredGptSyncGrants(filteredGpt)
+    
+    // Also update combined filtered grants for compatibility
+    const allFiltered = applyFiltersToArray(grants)
+    setFilteredGrants(allFiltered)
+    
     setCurrentPage(1)
   }
 
@@ -840,10 +871,11 @@ export default function GrantsSearchPage() {
     setCurrentUser({ ...user, alerts: user.alerts || [] })
   }
 
-  // Pagination
-  const totalPages = Math.ceil(filteredGrants.length / itemsPerPage)
+  // Pagination - use the appropriate array based on sub-tab
+  const activeGrantsArray = grantsSubTab === "api" ? filteredApiGrants : filteredGptSyncGrants
+  const totalPages = Math.ceil(activeGrantsArray.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedGrants = filteredGrants.slice(startIndex, startIndex + itemsPerPage)
+  const paginatedGrants = activeGrantsArray.slice(startIndex, startIndex + itemsPerPage)
 
   const mapStatus = (status: string | undefined | null): "Forecasted" | "Open" | "Closed" | "Archived" => {
     if (!status) return "Open"
@@ -961,6 +993,16 @@ export default function GrantsSearchPage() {
         {activeTab === "gpt-sync" ? (
           <GPTSyncPanel
             onGrantsFound={(newGrants) => {
+              // Store in gptSyncGrants (separate from API grants)
+              setGptSyncGrants((prev) => {
+                const existingIds = new Set(prev.map((g) => g.id))
+                const unique = newGrants.filter((g: any) => !existingIds.has(g.id))
+                const updated = [...unique, ...prev]
+                // Also update filtered immediately
+                setFilteredGptSyncGrants(updated)
+                return updated
+              })
+              // Also add to combined grants for backward compatibility
               setGrants((prev) => {
                 const existingIds = new Set(prev.map((g) => g.id))
                 const unique = newGrants.filter((g: any) => !existingIds.has(g.id))
@@ -984,9 +1026,56 @@ export default function GrantsSearchPage() {
                 }}
               />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Filters Sidebar */}
-            <div className="lg:col-span-1">
+          <div className="space-y-4">
+            {/* Sub-tabs for API Sources vs GPT-Sync Results */}
+            <div className="flex items-center gap-4 border-b border-gray-200 pb-2">
+              <button
+                onClick={() => {
+                  setGrantsSubTab("api")
+                  setCurrentPage(1)
+                }}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                  grantsSubTab === "api"
+                    ? "bg-white border border-b-white border-gray-200 text-[#1e3a5f] -mb-[1px]"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <Plug className="h-4 w-4" />
+                API Sources
+                <span className="ml-1 bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+                  {filteredApiGrants.length}
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  setGrantsSubTab("gpt-sync")
+                  setCurrentPage(1)
+                }}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                  grantsSubTab === "gpt-sync"
+                    ? "bg-white border border-b-white border-gray-200 text-[#1e3a5f] -mb-[1px]"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <Bot className="h-4 w-4" />
+                GPT-Sync Results
+                <span className="ml-1 bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
+                  {filteredGptSyncGrants.length}
+                </span>
+              </button>
+              
+              {/* Source description */}
+              <div className="ml-auto text-xs text-gray-500">
+                {grantsSubTab === "api" 
+                  ? "Opportunities from Grants.gov, SAM.gov, EU Funding Portal, and Spanish portals"
+                  : "Opportunities discovered and scored by GPT-Sync intelligent search"
+                }
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {/* Filters Sidebar */}
+              <div className="lg:col-span-1">
               <Card className="border-[#d1d5db]">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-4">
@@ -1729,6 +1818,7 @@ export default function GrantsSearchPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
           </div>
         )}
       </div>

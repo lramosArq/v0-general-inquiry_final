@@ -193,16 +193,44 @@ export class EUFundingFetcher {
       // Get title
       const title = metadata.title?.[0] || content.substring(0, 100) || identifier
       
-      // Get dates
-      const deadline = this.parseApiDate(metadata.deadlineDate?.[0] || metadata.deadline?.[0])
-      const openingDate = this.parseApiDate(metadata.openingDate?.[0] || metadata.startDate?.[0])
-      const publishDate = this.parseApiDate(metadata.publicationDate?.[0]) || new Date().toISOString().split("T")[0]
+      // Get dates - IMPORTANT: deadline comes from deadlineDate (closing), openingDate/startDate is when it opens
+      const rawDeadline = metadata.deadlineDate?.[0] || metadata.deadline?.[0]
+      const rawOpening = metadata.openingDate?.[0] || metadata.startDate?.[0]
+      const rawPublish = metadata.publicationDate?.[0]
       
-      // Get budget
-      const budget = metadata.budgetOverview?.[0] || metadata.budget?.[0] || ""
+      const deadline = this.parseApiDate(rawDeadline)
+      const openingDate = this.parseApiDate(rawOpening)
+      const publishDate = this.parseApiDate(rawPublish) || new Date().toISOString().split("T")[0]
       
-      // Get description
-      const description = (metadata.description?.[0] || metadata.descriptionByte?.[0] || content || "").substring(0, 500)
+      // FILTER: Skip closed opportunities (deadline in the past)
+      const today = new Date().toISOString().split("T")[0]
+      if (deadline && deadline < today) {
+        return null // Skip closed grants
+      }
+      
+      // Validate dates: deadline should be after openingDate
+      let finalDeadline = deadline
+      let finalOpeningDate = openingDate
+      
+      if (deadline && openingDate && deadline < openingDate) {
+        // Dates are swapped - swap them back
+        finalDeadline = openingDate
+        finalOpeningDate = deadline
+      }
+      
+      // Ensure opening date is not in the future relative to publish date
+      // Use publish date as opening if opening is missing
+      if (!finalOpeningDate) {
+        finalOpeningDate = publishDate
+      }
+      
+      // Get budget and format it
+      const rawBudget = metadata.budgetOverview?.[0] || metadata.budget?.[0] || ""
+      const budget = this.formatBudget(rawBudget)
+      
+      // Get description - clean and make it informative
+      const rawDescription = metadata.description?.[0] || metadata.descriptionByte?.[0] || content || ""
+      const description = this.cleanDescription(rawDescription, title, identifier)
       
       // Get programme
       const programme = metadata.programmePeriod?.[0] || metadata.frameworkProgramme?.[0] || "EU Funding & Tenders"
@@ -226,8 +254,8 @@ export class EUFundingFetcher {
         title,
         organization: "European Commission",
         publishDate,
-        deadline,
-        openingDate,
+        deadline: finalDeadline,
+        openingDate: finalOpeningDate,
         amount: budget,
         budget,
         category,
@@ -249,29 +277,123 @@ export class EUFundingFetcher {
   }
   
   /**
-   * Parse API date format
+   * Clean and format description to be informative and concise
+   */
+  private cleanDescription(rawDesc: string, title: string, identifier: string): string {
+    if (!rawDesc || rawDesc.trim().length === 0) {
+      // Generate a basic description from title
+      return `EU funding opportunity: ${title}. Topic ID: ${identifier}. Visit the EU Funding & Tenders Portal for full details.`
+    }
+    
+    // Remove HTML tags
+    let cleaned = rawDesc.replace(/<[^>]*>/g, " ")
+    
+    // Remove excessive whitespace
+    cleaned = cleaned.replace(/\s+/g, " ").trim()
+    
+    // Remove common boilerplate phrases
+    const boilerplate = [
+      "expected outcome",
+      "scope:",
+      "this topic",
+      "project results are expected to contribute to",
+      "proposals are expected to"
+    ]
+    
+    for (const phrase of boilerplate) {
+      const idx = cleaned.toLowerCase().indexOf(phrase)
+      if (idx !== -1 && idx < 50) {
+        cleaned = cleaned.substring(idx)
+        break
+      }
+    }
+    
+    // Truncate to reasonable length (300 chars) and add ellipsis if needed
+    if (cleaned.length > 300) {
+      // Try to cut at word boundary
+      const cutPoint = cleaned.lastIndexOf(" ", 300)
+      cleaned = cleaned.substring(0, cutPoint > 200 ? cutPoint : 300) + "..."
+    }
+    
+    // If still too short or generic, enhance it
+    if (cleaned.length < 50) {
+      return `EU funding opportunity under ${identifier}. ${cleaned} Visit the EU Funding Portal for complete details and application requirements.`
+    }
+    
+    return cleaned
+  }
+  
+  /**
+   * Format budget string to be more readable
+   */
+  private formatBudget(rawBudget: string): string {
+    if (!rawBudget) return ""
+    
+    // Try to extract numeric value and format it
+    const numMatch = rawBudget.match(/[\d,\.]+/)
+    if (numMatch) {
+      const numStr = numMatch[0].replace(/,/g, "")
+      const num = parseFloat(numStr)
+      if (!isNaN(num)) {
+        if (num >= 1000000) {
+          return `EUR ${(num / 1000000).toFixed(1)}M`
+        } else if (num >= 1000) {
+          return `EUR ${(num / 1000).toFixed(0)}K`
+        }
+      }
+    }
+    
+    return rawBudget
+  }
+  
+  /**
+   * Parse API date format with validation
+   * Validates that dates are within reasonable range (2020-2030)
    */
   private parseApiDate(dateValue: any): string {
     if (!dateValue) return ""
     
     try {
+      let date: Date | null = null
+      
       // Handle timestamp (milliseconds)
       if (typeof dateValue === "number") {
-        return new Date(dateValue).toISOString().split("T")[0]
+        // Validate timestamp is reasonable (between 2020 and 2030)
+        // 2020-01-01 = 1577836800000, 2030-12-31 = 1924905600000
+        if (dateValue > 1577836800000 && dateValue < 1924905600000) {
+          date = new Date(dateValue)
+        } else if (dateValue > 1577836800 && dateValue < 1924905600) {
+          // Timestamp might be in seconds instead of milliseconds
+          date = new Date(dateValue * 1000)
+        }
+      } else {
+        // Handle string
+        const dateStr = String(dateValue)
+        
+        // Already ISO format (YYYY-MM-DD)
+        if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+          const parsed = new Date(dateStr.substring(0, 10))
+          if (!isNaN(parsed.getTime())) {
+            date = parsed
+          }
+        } else {
+          // Try parsing as date string
+          const parsed = new Date(dateStr)
+          if (!isNaN(parsed.getTime())) {
+            date = parsed
+          }
+        }
       }
       
-      // Handle string
-      const dateStr = String(dateValue)
-      
-      // Already ISO format
-      if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        return dateStr.substring(0, 10)
-      }
-      
-      // Try parsing
-      const date = new Date(dateStr)
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split("T")[0]
+      // Validate date is within reasonable range (2020-2030)
+      if (date) {
+        const year = date.getFullYear()
+        if (year >= 2020 && year <= 2030) {
+          return date.toISOString().split("T")[0]
+        } else {
+          console.log(`[v0] EU Date Warning: Year ${year} out of range (2020-2030), raw value: ${dateValue}`)
+          return ""
+        }
       }
       
       return ""

@@ -871,6 +871,9 @@ export default function GrantsSearchPage() {
     setCurrentUser({ ...user, alerts: user.alerts || [] })
   }
 
+  // Debug log for grant arrays
+  console.log("[v0] Grant arrays - apiGrants:", apiGrants.length, "gptSyncGrants:", gptSyncGrants.length, "filteredApiGrants:", filteredApiGrants.length, "filteredGptSyncGrants:", filteredGptSyncGrants.length)
+  
   // Pagination - use the appropriate array based on sub-tab
   const activeGrantsArray = grantsSubTab === "api" ? filteredApiGrants : filteredGptSyncGrants
   const totalPages = Math.ceil(activeGrantsArray.length / itemsPerPage)
@@ -993,11 +996,13 @@ export default function GrantsSearchPage() {
         {activeTab === "gpt-sync" ? (
           <GPTSyncPanel
             onGrantsFound={(newGrants) => {
+              console.log("[v0] GPT-Sync onGrantsFound called with", newGrants.length, "grants")
               // Store in gptSyncGrants (separate from API grants)
               setGptSyncGrants((prev) => {
                 const existingIds = new Set(prev.map((g) => g.id))
                 const unique = newGrants.filter((g: any) => !existingIds.has(g.id))
                 const updated = [...unique, ...prev]
+                console.log("[v0] GPT-Sync grants updated:", prev.length, "->", updated.length)
                 // Also update filtered immediately
                 setFilteredGptSyncGrants(updated)
                 return updated

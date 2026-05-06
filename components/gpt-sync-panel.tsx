@@ -59,295 +59,332 @@ interface CustomSearch {
   resultsCount: number
 }
 
-// ARQUIMEA Programs with their specialized prompts
+// ARQUIMEA Programs with specialized prompts, keywords, and EXCLUSION keywords
+// Based on NewTek program descriptions document
 export const ARQUIMEA_PROGRAMS = [
   {
     id: "arqeos-missiles",
     name: "ARQEOS Missiles",
     icon: Rocket,
     color: "bg-red-500",
-    prompt: "Search for grants and contracts related to long-range strike systems, loitering munitions, cruise missiles, subsonic tactical missiles, turbojet propulsion, modular warhead systems, AI-assisted targeting, man-in-the-loop control systems, and hybrid drone-missile platforms for defense applications.",
-    keywords: ["strike systems", "loitering munition", "cruise missile", "turbojet", "warhead", "tactical missile", "AI targeting", "defense"],
+    prompt: "Search for grants and contracts related to long-range loitering strike systems, subsonic cruise missiles, turbojet propulsion, modular warhead systems, AI-assisted targeting, hybrid drone-missile platforms. Focus on munition systems NOT surveillance.",
+    keywords: ["cruise missile", "turbojet propulsion", "warhead", "strike system", "loitering strike", "subsonic missile", "tactical missile", "munition system", "guided munition"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "training program", "workforce", "prevention", "counseling", "nutrition", "social service", "housing", "community"],
   },
   {
     id: "canarysat",
-    name: "CanarySat Constellation",
+    name: "BeetleSat Constellation",
     icon: Satellite,
     color: "bg-blue-500",
-    prompt: "Search for grants and contracts related to LEO satellite constellations, Ka-band connectivity, deployable antennas, inter-satellite links (ISL), high-throughput satellites, low-latency communications, cellular backhaul, space-qualified components, and satellite integration facilities.",
-    keywords: ["satellite constellation", "LEO", "Ka-band", "ISL", "inter-satellite", "high-throughput", "space communication", "satellite integration"],
+    prompt: "Search for grants related to LEO satellite constellations, Ka-band connectivity, deployable expandable antennas, inter-satellite links (ISL), high-throughput satellites, low-latency communications, cellular backhaul, and satellite mass production.",
+    keywords: ["satellite constellation", "LEO satellite", "Ka-band", "inter-satellite link", "ISL", "high-throughput satellite", "satellite integration", "deployable antenna", "Tbps"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "agriculture", "food", "housing", "social"],
   },
   {
     id: "biotechnology",
     name: "ARQUIMEA Biotechnology",
     icon: Microscope,
     color: "bg-green-500",
-    prompt: "Search for grants and contracts related to ALS therapeutics, Alzheimer's treatment, cancer research, wearable biosensors, microbiology platforms, antibiotic discovery, extremophile metagenomes, AI-driven drug discovery, postbiotics, microbiota research, soil remediation, organoid research, and translational medicine.",
-    keywords: ["ALS", "Alzheimer", "biosensor", "microbiology", "antibiotic", "drug discovery", "therapeutics", "biotechnology", "microbiome"],
+    prompt: "Search for grants related to ALS therapeutics, Alzheimer's treatment, wearable biosensors, microbiology platforms, antibiotic discovery from extremophiles, AI-driven drug discovery, postbiotics, microbiota-brain axis, and soil remediation.",
+    keywords: ["ALS therapeutic", "Alzheimer treatment", "biosensor", "extremophile", "antibiotic discovery", "microbiome", "postbiotic", "organoid", "metagenome"],
+    excludeKeywords: ["missile", "munition", "weapon", "satellite", "UAV", "drone strike"],
   },
   {
     id: "deeparq",
     name: "DeepArq Autonomy Platform",
     icon: Brain,
     color: "bg-purple-500",
-    prompt: "Search for grants and contracts related to UAV autonomy software, AI pilot systems, mission control systems, autonomous behaviors, target tracking, search and recognition, tactical edge computing, resilient communications, human-in-the-loop supervision, and multi-platform coordination.",
-    keywords: ["UAV autonomy", "AI pilot", "autonomous", "mission control", "target tracking", "tactical edge", "swarm", "UAS software"],
+    prompt: "Search for grants related to UAV autonomy software, AI pilot systems, autonomous behaviors, target tracking and recognition, tactical edge computing, Autonomy Operating System, swarm coordination, and human-in-the-loop supervision for uncrewed systems.",
+    keywords: ["UAV autonomy", "AI pilot", "autonomous UAV", "target tracking", "swarm coordination", "tactical edge", "UAS software", "autonomy stack", "mission control UAV"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "agriculture", "housing", "social service"],
   },
   {
     id: "hw-sw-subsystems",
     name: "HW-SW Subsystems for Secure Autonomy",
     icon: Cpu,
     color: "bg-indigo-500",
-    prompt: "Search for grants and contracts related to ITAR-free systems, autonomous system architectures, sensor fusion, real-time mission planning, resilient communication frameworks, cross-platform compatibility, AI-driven autonomy subsystems, and supply chain security for defense systems.",
-    keywords: ["ITAR-free", "autonomous systems", "sensor fusion", "mission planning", "resilient communication", "defense architecture", "secure systems"],
+    prompt: "Search for grants related to ITAR-free autonomous systems, non-ITAR sensor fusion, real-time mission planning, resilient communication frameworks, supply chain security for defense, and cross-platform autonomous architectures.",
+    keywords: ["ITAR-free", "non-ITAR", "sensor fusion UAV", "mission planning", "resilient communication", "autonomous architecture", "supply chain security"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "agriculture", "housing"],
   },
   {
     id: "pulsar-propulsion",
-    name: "PULSAR Propulsion Systems",
+    name: "PULSAR HRI Actuation",
     icon: Zap,
     color: "bg-yellow-500",
-    prompt: "Search for grants and contracts related to high-efficiency propulsion, UAV propulsion systems, extended flight duration, energy efficiency optimization, payload capacity enhancement, electric motors for drones, next-generation propulsion, and autonomous flight capabilities.",
-    keywords: ["propulsion", "UAV motor", "flight duration", "electric propulsion", "drone efficiency", "payload capacity", "PULSAR"],
+    prompt: "Search for grants related to high-bandwidth torque-dense motors, QDD actuators, legged robotics, collaborative robots, wearable robotics, PMSM motors, human-robot interaction, and robotic actuation systems.",
+    keywords: ["torque-dense motor", "QDD actuator", "legged robot", "collaborative robot", "wearable robot", "PMSM motor", "human-robot interaction", "robotic actuation"],
+    excludeKeywords: ["HIV", "health services", "education", "agriculture", "housing", "social"],
   },
   {
     id: "space-mechanisms",
     name: "Space Mechanisms & Actuators",
     icon: Satellite,
     color: "bg-cyan-500",
-    prompt: "Search for grants and contracts related to space-qualified mechanisms, release and deployment devices, pyrotechnic-free actuators, Hold-Down Release Mechanisms (HDRM), non-explosive release systems, rotary actuators, antenna deployment, solar array deployment, and ITAR-free space components.",
-    keywords: ["space mechanism", "actuator", "HDRM", "deployment system", "release mechanism", "space qualified", "ITAR-free space"],
+    prompt: "Search for grants related to space-qualified mechanisms, pyrotechnic-free actuators, Hold-Down Release Mechanisms (HDRM), non-explosive release, rotary actuators for space, antenna deployment, solar array deployment, and ITAR-free space components.",
+    keywords: ["space mechanism", "HDRM", "release mechanism", "pyrotechnic-free", "space actuator", "deployment mechanism", "solar array deployment", "antenna deployment space"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "agriculture", "housing"],
   },
   {
     id: "molefy-pharma",
     name: "Molefy Pharma",
     icon: Activity,
     color: "bg-pink-500",
-    prompt: "Search for grants and contracts related to neurodegenerative disease treatment, ALS therapeutics, TDP-43 modulation, TTBK1 inhibitors, frontotemporal dementia, GMP drug production, Phase I clinical trials, small-molecule drugs, and orphan drug designation.",
-    keywords: ["neurodegenerative", "ALS", "TDP-43", "TTBK1", "dementia", "clinical trial", "orphan drug", "pharma"],
+    prompt: "Search for grants related to ALS drug development, TDP-43 modulation, TTBK1 inhibitors, frontotemporal dementia, small-molecule neurodegenerative drugs, GMP drug production, and Phase I clinical trials for neurodegeneration.",
+    keywords: ["TDP-43", "TTBK1", "ALS drug", "frontotemporal dementia", "neurodegenerative drug", "GMP production", "Phase I clinical", "orphan drug"],
+    excludeKeywords: ["missile", "munition", "weapon", "satellite", "UAV"],
   },
   {
     id: "propellantless-propulsion",
     name: "Propellantless Space Propulsion",
     icon: Compass,
     color: "bg-orange-500",
-    prompt: "Search for grants and contracts related to propellantless propulsion, piezoelectric thrust generation, resonant excitation, attitude control systems, delta-v capability, small satellite propulsion, and advanced space propulsion research.",
-    keywords: ["propellantless", "piezoelectric", "attitude control", "delta-v", "small satellite", "advanced propulsion", "space propulsion"],
+    prompt: "Search for grants related to propellantless propulsion, piezoelectric thrust generation, resonant piezoelectric excitation, attitude control without propellant, delta-v without propellant, and advanced space propulsion research.",
+    keywords: ["propellantless propulsion", "piezoelectric thrust", "resonant excitation", "attitude control satellite", "delta-v propulsion", "electric propulsion space"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "agriculture", "housing"],
   },
   {
     id: "naval-loitering",
     name: "Naval Loitering Systems",
     icon: Ship,
     color: "bg-slate-500",
-    prompt: "Search for grants and contracts related to naval autonomous systems, kamikaze vessels, surface/subsurface drones, hybrid maritime platforms, autonomous submarines, naval strike capability, swarm coordination, maritime defense, and asymmetric naval warfare.",
-    keywords: ["naval autonomous", "maritime drone", "submarine", "surface vessel", "naval strike", "swarm", "maritime defense", "USV"],
+    prompt: "Search for grants related to autonomous kamikaze vessels, suicide surface craft, loitering unmanned submarines, hybrid surface-subsurface drones, naval swarm systems, and asymmetric naval strike capability.",
+    keywords: ["naval loitering", "kamikaze vessel", "autonomous submarine", "USV strike", "maritime swarm", "surface subsurface drone", "naval autonomous strike"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "fishing", "marine biology", "ocean conservation"],
   },
   {
     id: "qslam-family",
     name: "Q-SLAM Loitering Munitions",
     icon: Target,
     color: "bg-red-600",
-    prompt: "Search ONLY for grants and contracts specifically related to loitering munitions, kamikaze drones, one-way attack drones, suicide drones, expendable attack UAVs, precision strike munitions, man-portable loitering weapon systems, tactical loitering attack platforms, and switchblade-type munitions. Exclude general surveillance or reconnaissance systems.",
-    keywords: ["loitering munition", "kamikaze drone", "one-way attack", "suicide drone", "expendable UAV", "switchblade", "tactical strike drone", "precision loitering"],
+    prompt: "Search ONLY for grants specifically related to loitering munitions, kamikaze drones, one-way attack drones, man-portable loitering weapons, tactical loitering attack, switchblade-type munitions, and expendable attack UAVs.",
+    keywords: ["loitering munition", "kamikaze drone", "one-way attack", "expendable UAV", "switchblade", "tactical loitering", "man-portable munition", "precision strike UAV"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "surveillance only", "reconnaissance only", "agriculture", "housing"],
   },
   {
     id: "comms-payloads",
     name: "High Data Rate Communications",
     icon: Radio,
     color: "bg-teal-500",
-    prompt: "Search for grants and contracts related to high data rate communication payloads, satellite communication systems, secure data links, bandwidth optimization, space communication technology, and next-generation communication systems.",
-    keywords: ["high data rate", "communication payload", "satellite comms", "secure link", "bandwidth", "space communication"],
+    prompt: "Search for grants related to high data rate communication payloads, satellite communication systems, secure tactical data links, MANET communications, Software Defined Radios, anti-jamming communication, and spectrum management.",
+    keywords: ["high data rate", "communication payload", "satellite comms", "MANET", "SDR", "anti-jamming", "spectrum management", "tactical datalink"],
+    excludeKeywords: ["HIV", "health", "medical", "education", "agriculture", "housing"],
   },
   {
     id: "neuromorphic-perception",
     name: "Neuromorphic Perception Systems",
     icon: Brain,
     color: "bg-violet-500",
-    prompt: "Search for grants and contracts related to neuromorphic computing, event-based sensors, brain-inspired processing, low-latency perception, energy-efficient AI, edge computing for defense, situational awareness systems, and multi-modal sensing.",
-    keywords: ["neuromorphic", "event-based", "brain-inspired", "edge AI", "perception", "situational awareness", "low-latency"],
+    prompt: "Search for grants related to neuromorphic computing, event-based sensors, brain-inspired processing, low-latency perception, energy-efficient edge AI for defense, and multi-modal sensing systems.",
+    keywords: ["neuromorphic computing", "event-based sensor", "brain-inspired", "spiking neural", "edge perception", "low-latency AI", "situational awareness sensor"],
+    excludeKeywords: ["HIV", "health service", "education program", "workforce", "housing", "agriculture"],
   },
   {
     id: "pulsar-hri",
     name: "PULSAR HRI Robotics",
     icon: Cpu,
     color: "bg-amber-500",
-    prompt: "Search for grants and contracts related to high-bandwidth actuators, torque-dense motors, quasi-direct-drive actuators, legged robotics, collaborative robotics, wearable robotics, human-robot interaction, PMSM motors, and robotic actuation systems.",
-    keywords: ["actuator", "torque motor", "QDD", "legged robot", "collaborative robot", "wearable robot", "HRI", "PMSM"],
+    prompt: "Search for grants related to high-bandwidth actuators, torque-dense motors, quasi-direct-drive actuators, legged robotics, collaborative robotics, wearable robotics, and human-robot interaction systems.",
+    keywords: ["torque-dense motor", "QDD actuator", "legged robot", "collaborative robot", "wearable robot", "HRI actuator", "PMSM motor"],
+    excludeKeywords: ["HIV", "health service", "education", "agriculture", "housing"],
   },
   {
     id: "satellite-denied-nav",
     name: "Satellite-Denied Navigation",
     icon: Compass,
     color: "bg-emerald-500",
-    prompt: "Search for grants and contracts related to GPS-denied navigation, alternative PNT solutions, inertial navigation systems (INS), computer vision navigation, magnetic anomaly mapping, celestial navigation, quantum sensors, terrain navigation, and resilient positioning systems.",
-    keywords: ["GPS-denied", "PNT", "INS", "inertial navigation", "celestial navigation", "quantum sensor", "terrain navigation", "positioning"],
+    prompt: "Search for grants related to GPS-denied navigation, alternative PNT solutions, inertial navigation systems (INS), magnetic anomaly mapping, celestial navigation, quantum inertial sensors, and terrain-based navigation.",
+    keywords: ["GPS-denied", "PNT solution", "inertial navigation", "INS", "celestial navigation", "quantum inertial", "terrain navigation", "magnetic navigation"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture"],
   },
   {
     id: "trustworthy-ai",
     name: "Trustworthy AI for Autonomy",
     icon: Shield,
     color: "bg-blue-600",
-    prompt: "Search for grants and contracts related to safe autonomous systems, AI decision-making, adaptive mission planning, collision avoidance, human-machine teaming, predictive trajectory optimization, fail-safe mechanisms, and operational resilience in GPS-denied environments.",
-    keywords: ["trustworthy AI", "safe autonomy", "mission planning", "collision avoidance", "human-machine", "trajectory", "fail-safe", "resilient AI"],
+    prompt: "Search for grants related to safe autonomous UAV systems, AI decision-making for defense, adaptive mission planning, collision avoidance, human-machine teaming, and fail-safe mechanisms for GPS-denied environments.",
+    keywords: ["trustworthy autonomy", "safe AI UAV", "mission planning AI", "collision avoidance UAV", "human-machine teaming", "fail-safe autonomous"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture", "food safety"],
   },
   {
     id: "sdr-communications",
     name: "Software Defined Radios (SDR)",
     icon: Radio,
     color: "bg-indigo-600",
-    prompt: "Search for grants and contracts related to software defined radios, MANET networks, anti-jamming technology, dynamic spectrum management, adaptive waveforms, electronic warfare resilience, SWaP optimization, and secure tactical communications.",
-    keywords: ["SDR", "MANET", "anti-jamming", "spectrum management", "waveform", "electronic warfare", "tactical comms", "SWaP"],
+    prompt: "Search for grants related to software defined radios for tactical communications, MANET networks, anti-jamming technology, dynamic spectrum management, and electronic warfare resilience.",
+    keywords: ["software defined radio", "SDR tactical", "MANET network", "anti-jamming comms", "spectrum management", "electronic warfare comms", "tactical waveform"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture"],
   },
   {
     id: "edge-ai-satellites",
     name: "Edge AI for Satellites",
     icon: Satellite,
     color: "bg-purple-600",
-    prompt: "Search for grants and contracts related to onboard satellite AI, edge computing in space, real-time image processing, anomaly detection, autonomous mission optimization, satellite data processing, and intelligent space systems.",
-    keywords: ["edge AI", "satellite AI", "onboard processing", "anomaly detection", "autonomous satellite", "space AI", "image processing"],
+    prompt: "Search for grants related to onboard satellite AI processing, edge computing in space, real-time satellite image processing, anomaly detection in orbit, and autonomous satellite mission optimization.",
+    keywords: ["edge AI satellite", "onboard processing satellite", "satellite AI", "space edge computing", "autonomous satellite", "orbital AI"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture"],
   },
   {
     id: "thermo-structural",
     name: "Satellite Thermo-Structural Solutions",
     icon: Satellite,
     color: "bg-gray-500",
-    prompt: "Search for grants and contracts related to satellite thermal management, embedded heat pipes, composite panels, thermal-structural integration, heat dissipation systems, dimensional stability, and satellite platform architecture.",
-    keywords: ["thermal management", "heat pipe", "composite panel", "thermal-structural", "heat dissipation", "satellite platform"],
+    prompt: "Search for grants related to satellite thermal management, embedded heat pipes, composite structural panels, thermal-structural integration, and satellite platform thermal architecture.",
+    keywords: ["satellite thermal", "heat pipe satellite", "composite panel space", "thermal-structural", "satellite platform thermal"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture"],
   },
   {
     id: "uncharted-therapeutics",
     name: "Uncharted Therapeutics",
     icon: Microscope,
     color: "bg-rose-500",
-    prompt: "Search for grants and contracts related to generative AI drug discovery, de novo molecular design, AI-driven therapeutics, computational chemistry, molecular candidates generation, and accelerated drug development pipelines.",
-    keywords: ["generative AI", "drug discovery", "molecular design", "AI therapeutics", "computational chemistry", "de novo"],
+    prompt: "Search for grants related to generative AI for drug discovery, de novo molecular design, AI-driven therapeutic development, computational chemistry for drugs, and accelerated drug development pipelines.",
+    keywords: ["generative AI drug", "de novo molecular", "AI drug discovery", "computational chemistry", "molecular design AI", "therapeutic AI"],
+    excludeKeywords: ["missile", "munition", "weapon", "satellite", "UAV strike"],
   },
   {
     id: "volinga",
     name: "Volinga 3D/Radiance Fields",
     icon: Sparkles,
     color: "bg-fuchsia-500",
-    prompt: "Search for grants and contracts related to neural rendering, 3D Gaussian Splatting, radiance fields, virtual production, real-time 3D environments, Unreal Engine integration, photorealistic rendering, and media entertainment technology.",
-    keywords: ["neural rendering", "3DGS", "radiance fields", "virtual production", "real-time 3D", "Unreal Engine", "photorealistic"],
+    prompt: "Search for grants related to neural rendering technology, 3D Gaussian Splatting, radiance fields for virtual production, real-time 3D environments, and photorealistic rendering for media.",
+    keywords: ["neural rendering", "3D Gaussian Splatting", "3DGS", "radiance field", "virtual production", "photorealistic 3D", "nvol"],
+    excludeKeywords: ["HIV", "health service", "agriculture", "housing", "weapon"],
   },
   {
     id: "zen-biometrics",
     name: "Zen Biometrics",
     icon: Activity,
     color: "bg-lime-500",
-    prompt: "Search for grants and contracts related to cortisol monitoring, stress biomarkers, microneedle technology, wearable health sensors, preventive mental healthcare, continuous health monitoring, and Addison's disease management.",
-    keywords: ["cortisol", "stress monitoring", "microneedle", "wearable sensor", "mental health", "biomarker", "health monitoring"],
+    prompt: "Search for grants related to continuous cortisol monitoring, stress biomarker sensors, microneedle wearable technology, preventive mental healthcare monitoring, and Addison's disease cortisol tracking.",
+    keywords: ["cortisol monitoring", "stress biomarker", "microneedle wearable", "mental health sensor", "Addison disease", "cortisol wearable"],
+    excludeKeywords: ["missile", "munition", "weapon", "satellite", "UAV"],
   },
   {
     id: "locomotion-defense",
     name: "Locomotion Systems for Defense",
     icon: Plane,
     color: "bg-stone-500",
-    prompt: "Search for grants and contracts related to defense locomotion systems, military mobility platforms, autonomous ground vehicles, robotic locomotion, all-terrain systems, and tactical mobility solutions.",
-    keywords: ["locomotion", "mobility", "ground vehicle", "robotic movement", "all-terrain", "tactical mobility", "defense platform"],
+    prompt: "Search for grants related to defense locomotion systems, autonomous ground vehicles, robotic locomotion platforms, all-terrain military mobility, and tactical ground robotics.",
+    keywords: ["defense locomotion", "ground robot", "tactical mobility", "all-terrain robot", "military ground vehicle", "robotic locomotion defense"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture", "food"],
   },
   {
     id: "post-quantum-crypto",
     name: "Post-Quantum Cryptography",
     icon: Shield,
     color: "bg-cyan-600",
-    prompt: "Search for grants and contracts related to post-quantum cryptography, FrodoKEM implementation, MAYO digital signatures, RISC-V cryptographic coprocessors, crypto-agile architectures, quantum-resistant algorithms, authentication protocols, lattice-based cryptography, and hardware security modules.",
-    keywords: ["post-quantum", "FrodoKEM", "MAYO", "RISC-V crypto", "crypto-agile", "quantum-resistant", "lattice cryptography", "PQC"],
+    prompt: "Search for grants related to post-quantum cryptography, FrodoKEM, MAYO digital signatures, RISC-V cryptographic coprocessors, crypto-agile architectures, and quantum-resistant algorithms.",
+    keywords: ["post-quantum cryptography", "FrodoKEM", "MAYO signature", "RISC-V crypto", "crypto-agile", "quantum-resistant", "lattice cryptography", "PQC"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture"],
   },
   {
     id: "optical-phased-arrays",
     name: "Optical Phased Arrays & Photonics",
     icon: Radio,
     color: "bg-sky-500",
-    prompt: "Search for grants and contracts related to optical phased arrays (OPA), integrated photonic technology, inter-satellite optical communication, fiber optic gyroscopes (FOG), MIOC components, photonic integrated circuits (PIC), sub-THz generators, active alignment systems, and space optical systems.",
-    keywords: ["optical phased array", "photonic", "inter-satellite", "fiber optic gyroscope", "FOG", "PIC", "MIOC", "optical communication"],
+    prompt: "Search for grants related to optical phased arrays, integrated photonic technology, inter-satellite optical communication, fiber optic gyroscopes, and photonic integrated circuits for space.",
+    keywords: ["optical phased array", "OPA", "photonic integrated", "inter-satellite optical", "fiber optic gyroscope", "FOG", "MIOC", "PIC space"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture"],
   },
   {
     id: "quantum-sensing",
     name: "Quantum Sensing & Navigation",
     icon: Compass,
     color: "bg-violet-600",
-    prompt: "Search for grants and contracts related to quantum sensors, NV-center magnetometers, quantum magnetic navigation, quantum gyroscopy, structural quantum sensing, diamond NV sensors, quantum inertial navigation, and magnetometry for defense applications.",
-    keywords: ["quantum sensor", "NV-center", "quantum magnetometer", "quantum navigation", "quantum gyroscope", "diamond sensor", "quantum inertial"],
+    prompt: "Search for grants related to quantum sensors for navigation, NV-center magnetometers, quantum magnetic navigation, quantum gyroscopy, and diamond NV sensors for defense.",
+    keywords: ["quantum sensor navigation", "NV-center", "quantum magnetometer", "quantum gyroscope", "diamond NV", "quantum inertial sensor"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture"],
   },
   {
     id: "sar-3d-reconstruction",
     name: "SAR 3D Reconstruction & Neural Rendering",
     icon: Sparkles,
     color: "bg-indigo-400",
-    prompt: "Search for grants and contracts related to SAR inverse rendering, synthetic aperture radar 3D reconstruction, novel view synthesis (NVS), neural radiance fields for radar, image-goal navigation, zero-shot novelty detection, surface change detection, and episodic memory systems.",
-    keywords: ["SAR reconstruction", "inverse rendering", "novel view synthesis", "NVS", "3D reconstruction", "change detection", "neural rendering"],
+    prompt: "Search for grants related to SAR inverse rendering, synthetic aperture radar 3D reconstruction, novel view synthesis from radar, and neural radiance fields for SAR imagery.",
+    keywords: ["SAR reconstruction", "SAR inverse rendering", "synthetic aperture 3D", "novel view synthesis SAR", "neural rendering SAR", "radar 3D"],
+    excludeKeywords: ["HIV", "health service", "education", "housing", "agriculture"],
   },
   {
     id: "electrochemical-biosensors",
     name: "Electrochemical Biosensors",
     icon: Activity,
     color: "bg-teal-600",
-    prompt: "Search for grants and contracts related to electrochemical biosensors, aptamer sensors, osmium redox probes, microneedle electrochemical systems, cortisol detection, antibiotic detection in biofluids, wearable electrochemical sensors, and point-of-care diagnostics.",
-    keywords: ["electrochemical biosensor", "aptamer", "osmium probe", "microneedle sensor", "cortisol sensor", "antibiotic detection", "wearable biosensor"],
+    prompt: "Search for grants related to electrochemical biosensors, aptamer sensors, osmium redox probes, microneedle electrochemical systems, and wearable biosensor diagnostics.",
+    keywords: ["electrochemical biosensor", "aptamer sensor", "osmium redox", "microneedle electrochemical", "wearable biosensor", "point-of-care electrochemical"],
+    excludeKeywords: ["missile", "munition", "weapon", "satellite constellation", "UAV strike"],
   },
   {
     id: "peptide-therapeutics",
     name: "Peptide Therapeutics & ERK Inhibitors",
     icon: Microscope,
     color: "bg-rose-600",
-    prompt: "Search for grants and contracts related to peptide-based therapeutics, ERK pathway inhibitors, intracellular peptide delivery, NanoBRET assays, 3D tumor spheroid models, mimetic peptides, antitumor peptides, and targeted cancer therapy.",
-    keywords: ["peptide therapeutic", "ERK inhibitor", "intracellular delivery", "tumor spheroid", "mimetic peptide", "antitumor", "NanoBRET"],
+    prompt: "Search for grants related to peptide-based therapeutics, ERK pathway inhibitors, intracellular peptide delivery, tumor spheroid models, and mimetic antitumor peptides.",
+    keywords: ["peptide therapeutic", "ERK inhibitor", "intracellular peptide", "tumor spheroid", "mimetic peptide", "antitumor peptide", "NanoBRET"],
+    excludeKeywords: ["missile", "munition", "weapon", "satellite", "UAV strike"],
   },
   {
     id: "soil-bioremediation",
     name: "Soil Bioremediation & Microbiome",
     icon: Microscope,
     color: "bg-green-600",
-    prompt: "Search for grants and contracts related to burnt soil bioremediation, bacterial consortium, soil microbiome restoration, contaminant degradation, secondary metabolite analysis, freeze-drying bacteria, laurisilva restoration, and environmental microbiology.",
-    keywords: ["bioremediation", "soil restoration", "bacterial consortium", "microbiome", "contaminant degradation", "environmental microbiology", "burnt soil"],
+    prompt: "Search for grants related to burnt soil bioremediation, bacterial consortium for soil restoration, contaminant degradation, and environmental microbiology for ecosystem recovery.",
+    keywords: ["soil bioremediation", "bacterial consortium", "soil microbiome", "contaminant degradation", "burnt soil restoration", "environmental microbiology"],
+    excludeKeywords: ["missile", "munition", "weapon", "satellite", "UAV"],
   },
   {
     id: "exoskeletons-robotics",
     name: "Exoskeletons & Assisted Locomotion",
     icon: Cpu,
     color: "bg-amber-600",
-    prompt: "Search for grants and contracts related to powered exoskeletons, assisted locomotion systems, lower limb exoskeletons, metabolic consumption reduction, anthropomorphic robotic arms, high dynamic behavior robots, wearable robotics, and human augmentation.",
-    keywords: ["exoskeleton", "assisted locomotion", "powered orthosis", "wearable robot", "anthropomorphic arm", "human augmentation", "metabolic efficiency"],
+    prompt: "Search for grants related to powered exoskeletons, assisted locomotion systems, lower limb exoskeletons, metabolic efficiency wearables, and human augmentation robotics.",
+    keywords: ["powered exoskeleton", "assisted locomotion", "lower limb exo", "wearable robot exo", "human augmentation", "metabolic efficiency robot"],
+    excludeKeywords: ["HIV", "health service program", "education program", "agriculture", "housing"],
   },
   {
     id: "electric-motors-drives",
     name: "Electric Motors & High-Speed Drives",
     icon: Zap,
     color: "bg-yellow-600",
-    prompt: "Search for grants and contracts related to high-speed electric motors, high-current motor drivers, segmented motors, Vernier electric machines, dual inverter systems, integrated traction drives, slip rings, planetary gear transmissions, and PMSM motor development.",
-    keywords: ["high-speed motor", "motor driver", "segmented motor", "Vernier machine", "dual inverter", "traction drive", "planetary gear", "PMSM"],
+    prompt: "Search for grants related to high-speed electric motors, high-current motor drivers, segmented motors, Vernier electric machines, and integrated traction drive systems.",
+    keywords: ["high-speed motor", "motor driver high-current", "segmented motor", "Vernier machine", "traction drive", "PMSM development"],
+    excludeKeywords: ["HIV", "health service", "education", "agriculture", "housing"],
   },
   {
     id: "event-based-vision",
     name: "Event-Based Vision & SLAM",
     icon: Brain,
     color: "bg-purple-400",
-    prompt: "Search for grants and contracts related to event-based cameras, visual SLAM with aerial images, VIO (Visual Inertial Odometry), event-based VSLAM, polarimetric navigation, neuromorphic vision, long-range surveillance systems, and autonomous navigation with event cameras.",
-    keywords: ["event-based camera", "visual SLAM", "VIO", "polarimetric", "neuromorphic vision", "aerial SLAM", "event-based navigation"],
+    prompt: "Search for grants related to event-based cameras for navigation, visual SLAM with aerial images, VIO systems, polarimetric navigation, and neuromorphic vision for autonomous systems.",
+    keywords: ["event-based camera", "visual SLAM aerial", "VIO navigation", "polarimetric navigation", "neuromorphic vision", "event-based SLAM"],
+    excludeKeywords: ["HIV", "health service", "education", "agriculture", "housing"],
   },
   {
     id: "quantum-ml",
     name: "Quantum Machine Learning",
     icon: Brain,
     color: "bg-pink-600",
-    prompt: "Search for grants and contracts related to quantum machine learning, quantum transformers, quantum reservoir computing, time series forecasting with quantum systems, data-efficient quantum algorithms, and hybrid quantum-classical computing.",
-    keywords: ["quantum ML", "quantum transformer", "reservoir computing", "quantum forecasting", "hybrid quantum", "quantum algorithm"],
+    prompt: "Search for grants related to quantum machine learning, quantum transformers, quantum reservoir computing, and hybrid quantum-classical computing for defense applications.",
+    keywords: ["quantum machine learning", "quantum transformer", "quantum reservoir", "hybrid quantum-classical", "quantum algorithm ML"],
+    excludeKeywords: ["HIV", "health service", "education", "agriculture", "housing"],
   },
   {
     id: "digital-twin-robotics",
     name: "Digital Twin for Robotics",
     icon: Cpu,
     color: "bg-slate-600",
-    prompt: "Search for grants and contracts related to robotic digital twins, power consumption simulation, efficiency evaluation, kinematic chain characterization, high-level robot controllers, joint-level robotic metrics, and robotic simulation platforms.",
-    keywords: ["digital twin", "robotic simulation", "kinematic chain", "power simulation", "robot controller", "efficiency evaluation"],
+    prompt: "Search for grants related to robotic digital twins, power consumption simulation, kinematic chain characterization, and robotic simulation platforms for efficiency evaluation.",
+    keywords: ["robotic digital twin", "robot simulation", "kinematic chain model", "power simulation robot", "robot controller simulation"],
+    excludeKeywords: ["HIV", "health service", "education", "agriculture", "housing"],
   },
   {
     id: "gut-microbiome",
     name: "Gut Microbiome & Postbiotics",
     icon: Activity,
     color: "bg-lime-600",
-    prompt: "Search for grants and contracts related to gut microbiome modulation, postbiotics, intestinal epithelial models, Caco-2 cell studies, gut barrier permeability, colonic fermentation, and microbiome therapeutics.",
-    keywords: ["gut microbiome", "postbiotics", "Caco-2", "intestinal barrier", "colonic fermentation", "microbiome modulation", "gut health"],
+    prompt: "Search for grants related to gut microbiome modulation, postbiotics research, intestinal epithelial models, Caco-2 cell studies, and microbiome therapeutics development.",
+    keywords: ["gut microbiome", "postbiotic", "Caco-2", "intestinal barrier", "colonic fermentation", "microbiome therapeutic"],
+    excludeKeywords: ["missile", "munition", "weapon", "satellite", "UAV strike"],
   },
 ]
 
@@ -499,29 +536,49 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
   const scoreRelevance = (
     grant: { title: string; description?: string; category?: string; agency?: string },
     keywords: string[],
-  ): { score: number; matched: string[] } => {
+    excludeKeywords?: string[],
+  ): { score: number; matched: string[]; excluded: boolean } => {
     const title = (grant.title || "").toLowerCase()
     const description = (grant.description || "").toLowerCase()
     const category = (grant.category || "").toLowerCase()
     const agency = (grant.agency || "").toLowerCase()
     const fullText = `${title} ${description} ${category} ${agency}`
     
+    // FIRST: Check exclusion keywords - if found, immediately reject
+    if (excludeKeywords && excludeKeywords.length > 0) {
+      for (const exKw of excludeKeywords) {
+        const exKwLower = exKw.toLowerCase()
+        // Check title first (strongest signal of irrelevance)
+        if (title.includes(exKwLower)) {
+          return { score: 0, matched: [], excluded: true }
+        }
+        // Check description for medical/health exclusions
+        if (description.includes(exKwLower)) {
+          // Some exclusions are absolute (HIV, health services)
+          const absoluteExclusions = ["hiv", "aids", "prevention program", "health service", "counseling", "nutrition program"]
+          if (absoluteExclusions.some(ae => exKwLower.includes(ae) || ae.includes(exKwLower))) {
+            return { score: 0, matched: [], excluded: true }
+          }
+        }
+      }
+    }
+    
     const matched: string[] = []
     let score = 0
     
-    // Check each keyword with weighted scoring
+    // Check each keyword with weighted scoring - require more specific matches
     for (const kw of keywords) {
       const kwLower = kw.toLowerCase()
       
       // Higher weight for title matches (most relevant)
       if (title.includes(kwLower)) {
         matched.push(kw)
-        score += 20
+        score += 25  // Increased from 20
       }
       // Medium weight for description matches
       else if (description.includes(kwLower)) {
         matched.push(kw)
-        score += 12
+        score += 15  // Increased from 12
       }
       // Lower weight for category/agency matches
       else if (category.includes(kwLower) || agency.includes(kwLower)) {
@@ -530,20 +587,26 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       }
     }
     
-    // Bonus for multiple keyword matches (compound relevance)
-    if (matched.length >= 3) score += 15
-    if (matched.length >= 5) score += 10
+    // Require at least 2 keyword matches for defense/military programs
+    // This prevents false positives from single generic matches
+    if (matched.length < 2) {
+      score = Math.min(score, 20)  // Cap low-match scores
+    }
     
-    // Check for ARQUIMEA-specific terms that indicate high relevance
-    const arquimeaBoostTerms = [
-      "defense", "defence", "military", "satellite", "space", "UAV", "drone", 
-      "autonomous", "robotics", "AI", "biosensor", "therapeutics", "propulsion",
-      "navigation", "quantum", "cryptography", "photonics", "neuromorphic"
+    // Bonus for multiple keyword matches (compound relevance)
+    if (matched.length >= 3) score += 20
+    if (matched.length >= 5) score += 15
+    
+    // Additional check: penalize if description contains clear non-relevant content
+    const nonRelevantIndicators = [
+      "hiv prevention", "aids prevention", "health education", "community health",
+      "workforce development", "job training", "social services", "housing assistance",
+      "food assistance", "nutrition education", "substance abuse", "mental health counseling"
     ]
     
-    for (const term of arquimeaBoostTerms) {
-      if (fullText.includes(term.toLowerCase()) && !matched.includes(term)) {
-        score += 5
+    for (const indicator of nonRelevantIndicators) {
+      if (fullText.includes(indicator)) {
+        return { score: 0, matched: [], excluded: true }
       }
     }
     
@@ -555,7 +618,7 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
       score = 0
     }
     
-    return { score, matched }
+    return { score, matched, excluded: false }
   }
 
   const runProgramSync = async (program: typeof ARQUIMEA_PROGRAMS[0]) => {
@@ -619,15 +682,19 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     }
 
     // Score grants against program keywords - STRICT filtering for ARQUIMEA relevance
-    const programResults: SyncResult[] = []
-    const MIN_SCORE_THRESHOLD = 25  // Minimum score to be considered relevant
-    const MIN_KEYWORDS_MATCH = 1    // Must match at least 1 keyword
-    
-    for (const grant of allRawGrants) {
-      const { score, matched } = scoreRelevance(grant, program.keywords)
-      
-      // Only include if score meets threshold AND has keyword matches
-      if (score >= MIN_SCORE_THRESHOLD && matched.length >= MIN_KEYWORDS_MATCH) {
+  const programResults: SyncResult[] = []
+  const MIN_SCORE_THRESHOLD = 35  // Increased threshold for stricter filtering
+  const MIN_KEYWORDS_MATCH = 2    // Require at least 2 keyword matches
+  
+  for (const grant of allRawGrants) {
+  // Pass excludeKeywords from program definition for strict filtering
+  const { score, matched, excluded } = scoreRelevance(grant, program.keywords, (program as any).excludeKeywords)
+  
+  // Skip if excluded by exclusion keywords
+  if (excluded) continue
+  
+  // Only include if score meets threshold AND has keyword matches
+  if (score >= MIN_SCORE_THRESHOLD && matched.length >= MIN_KEYWORDS_MATCH) {
         const srcLabel = grant._sourceLabel
         programResults.push({
           id: grant.id,
@@ -852,15 +919,18 @@ export function GPTSyncPanel({ onGrantsFound }: GPTSyncPanelProps) {
     }
 
     // Score grants - STRICT filtering
-    const customResults: SyncResult[] = []
-    const MIN_SCORE = 25
-    const MIN_MATCHES = 1
-    
-    for (const grant of allRawGrants) {
-      const { score, matched } = scoreRelevance(grant, search.keywords)
-      
-      // Only include if meets thresholds
-      if (score >= MIN_SCORE && matched.length >= MIN_MATCHES) {
+  const customResults: SyncResult[] = []
+  const MIN_SCORE = 35  // Increased for stricter filtering
+  const MIN_MATCHES = 2  // Require at least 2 keyword matches
+  
+  for (const grant of allRawGrants) {
+  const { score, matched, excluded } = scoreRelevance(grant, search.keywords)
+  
+  // Skip if excluded
+  if (excluded) continue
+  
+  // Only include if meets thresholds
+  if (score >= MIN_SCORE && matched.length >= MIN_MATCHES) {
         const srcLabel = grant._sourceLabel
         customResults.push({
           id: grant.id,

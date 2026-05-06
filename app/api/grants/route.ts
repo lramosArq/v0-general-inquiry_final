@@ -94,6 +94,32 @@ function generateDirectUrl(grant: any, source: "usa" | "eu" | "spain"): string {
   }
 }
 
+/**
+ * Validate and normalize a date string
+ * Returns empty string for invalid or out-of-range dates (not between 2020-2030)
+ */
+function validateDate(dateStr: string | undefined): string {
+  if (!dateStr || dateStr === "" || dateStr === "null" || dateStr === "undefined") {
+    return ""
+  }
+  
+  try {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return ""
+    
+    const year = date.getFullYear()
+    // Reject dates with years outside reasonable range
+    if (year < 2020 || year > 2030) {
+      console.log(`[v0] Date validation warning: Year ${year} out of range for date ${dateStr}`)
+      return ""
+    }
+    
+    return date.toISOString().split("T")[0]
+  } catch {
+    return ""
+  }
+}
+
 function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
   // For EU grants, use the extracted call/topic identifier as opportunity number
   // This ensures the "Opportunity Number" column shows meaningful identifiers like HORIZON-CL4-2025-xxx
@@ -104,16 +130,22 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
     opportunityNumber = grant.callIdentifier || grant.topicIdentifier || grant.expedient || grant.id
   }
   
-  // Get dates - use openingDate for postedDate if available, otherwise publishDate
-  let postedDate = grant.openingDate || grant.publishDate
-  let closeDate = grant.deadline
+  // Get and validate dates
+  let postedDate = validateDate(grant.openingDate) || validateDate(grant.publishDate)
+  let closeDate = validateDate(grant.deadline)
   
   // Validate dates: closeDate must be after postedDate
   // If they're swapped, fix them
-  if (postedDate && closeDate && closeDate < postedDate) {
-    const temp = postedDate
-    postedDate = closeDate
-    closeDate = temp
+  if (postedDate && closeDate) {
+    const postedTime = new Date(postedDate).getTime()
+    const closeTime = new Date(closeDate).getTime()
+    
+    if (closeTime < postedTime) {
+      // Swap the dates
+      const temp = postedDate
+      postedDate = closeDate
+      closeDate = temp
+    }
   }
   
   // If no posted date, use a reasonable default based on close date
@@ -121,7 +153,17 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
     // Assume posted 3 months before deadline
     const deadlineDate = new Date(closeDate)
     deadlineDate.setMonth(deadlineDate.getMonth() - 3)
-    postedDate = deadlineDate.toISOString().split("T")[0]
+    const estimated = deadlineDate.toISOString().split("T")[0]
+    // Only use if it's valid
+    postedDate = validateDate(estimated) || ""
+  }
+  
+  // If no close date but have posted date, estimate close date (6 months later)
+  if (postedDate && !closeDate) {
+    const postedDateObj = new Date(postedDate)
+    postedDateObj.setMonth(postedDateObj.getMonth() + 6)
+    const estimated = postedDateObj.toISOString().split("T")[0]
+    closeDate = validateDate(estimated) || ""
   }
   
   return {

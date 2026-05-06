@@ -86,6 +86,59 @@ export class GrantsGovFetcher {
     return uniqueGrants
   }
 
+  /**
+   * Parse and validate date from Grants.gov API
+   * Grants.gov returns dates in MM/DD/YYYY format (e.g., "05/06/2026")
+   */
+  private parseGrantsGovDate(dateStr: string | undefined): string {
+    if (!dateStr || dateStr === "" || dateStr === "null" || dateStr === "undefined") {
+      return ""
+    }
+    
+    // Try MM/DD/YYYY format (most common from Grants.gov)
+    const mmddyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (mmddyyyyMatch) {
+      const [, month, day, year] = mmddyyyyMatch
+      const mm = month.padStart(2, "0")
+      const dd = day.padStart(2, "0")
+      return `${year}-${mm}-${dd}`
+    }
+    
+    // Try YYYY-MM-DD format (ISO)
+    const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+    }
+    
+    // Try timestamp in milliseconds
+    if (/^\d{13}$/.test(dateStr)) {
+      const date = new Date(parseInt(dateStr))
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split("T")[0]
+      }
+    }
+    
+    // Try timestamp in seconds
+    if (/^\d{10}$/.test(dateStr)) {
+      const date = new Date(parseInt(dateStr) * 1000)
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split("T")[0]
+      }
+    }
+    
+    // Try parsing as Date object
+    try {
+      const date = new Date(dateStr)
+      if (!isNaN(date.getTime()) && date.getFullYear() >= 2020 && date.getFullYear() <= 2030) {
+        return date.toISOString().split("T")[0]
+      }
+    } catch {
+      // ignore
+    }
+    
+    return ""
+  }
+
   private async fetchFromGrantsGovAPI(keyword?: string): Promise<GrantsGovGrant[]> {
     const searchKeyword = keyword || "defense"
 
@@ -106,24 +159,57 @@ export class GrantsGovFetcher {
 
     const result = await response.json()
     const opportunities = result?.data?.oppHits || []
+    
+    // Log sample data for debugging
+    if (opportunities.length > 0 && keyword === "defense") {
+      const sample = opportunities[0]
+      console.log(`[v0] Grants.gov sample - openDate: "${sample.openDate}", closeDate: "${sample.closeDate}", oppStatus: "${sample.oppStatus}"`)
+    }
+    
+    const today = new Date().toISOString().split("T")[0]
 
     return opportunities
       .filter((opp: any) => opp.oppStatus === "posted" || opp.oppStatus === "forecasted")
       .map((opp: any) => {
         const url = `https://www.grants.gov/search-results-detail/${opp.id}`
+        
+        // Parse dates properly
+        let openDate = this.parseGrantsGovDate(opp.openDate)
+        let closeDate = this.parseGrantsGovDate(opp.closeDate)
+        
+        // Validate: closeDate must be after openDate
+        if (openDate && closeDate && closeDate < openDate) {
+          // Swap if dates are inverted
+          const temp = openDate
+          openDate = closeDate
+          closeDate = temp
+        }
+        
+        // If openDate is missing but closeDate exists, estimate openDate as 3 months before
+        if (!openDate && closeDate) {
+          const deadlineDate = new Date(closeDate)
+          deadlineDate.setMonth(deadlineDate.getMonth() - 3)
+          openDate = deadlineDate.toISOString().split("T")[0]
+        }
+        
         return {
           id: opp.id?.toString() || opp.number,
           title: opp.title,
           organization: opp.agencyName || opp.agencyCode,
-          publishDate: opp.openDate || "",
-          deadline: opp.closeDate || "",
-          amount: opp.awardCeiling || "",
-          category: opp.category || "Federal Grant",
+          publishDate: openDate,
+          deadline: closeDate,
+          amount: opp.awardCeiling ? `$${Number(opp.awardCeiling).toLocaleString()}` : "",
+          category: opp.category || opp.cfda || "Federal Grant",
           description: opp.synopsis || opp.title,
           expedient: opp.number || opp.id?.toString(),
           sourceUrl: url,
           url: url,
         }
+      })
+      // Filter out closed opportunities
+      .filter((grant: GrantsGovGrant) => {
+        if (!grant.deadline) return true // Keep grants without deadline (ongoing)
+        return grant.deadline >= today
       })
   }
 

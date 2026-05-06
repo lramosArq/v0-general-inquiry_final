@@ -347,29 +347,53 @@ export class EUFundingFetcher {
   }
   
   /**
-   * Parse API date format
+   * Parse API date format with validation
+   * Validates that dates are within reasonable range (2020-2030)
    */
   private parseApiDate(dateValue: any): string {
     if (!dateValue) return ""
     
     try {
+      let date: Date | null = null
+      
       // Handle timestamp (milliseconds)
       if (typeof dateValue === "number") {
-        return new Date(dateValue).toISOString().split("T")[0]
+        // Validate timestamp is reasonable (between 2020 and 2030)
+        // 2020-01-01 = 1577836800000, 2030-12-31 = 1924905600000
+        if (dateValue > 1577836800000 && dateValue < 1924905600000) {
+          date = new Date(dateValue)
+        } else if (dateValue > 1577836800 && dateValue < 1924905600) {
+          // Timestamp might be in seconds instead of milliseconds
+          date = new Date(dateValue * 1000)
+        }
+      } else {
+        // Handle string
+        const dateStr = String(dateValue)
+        
+        // Already ISO format (YYYY-MM-DD)
+        if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+          const parsed = new Date(dateStr.substring(0, 10))
+          if (!isNaN(parsed.getTime())) {
+            date = parsed
+          }
+        } else {
+          // Try parsing as date string
+          const parsed = new Date(dateStr)
+          if (!isNaN(parsed.getTime())) {
+            date = parsed
+          }
+        }
       }
       
-      // Handle string
-      const dateStr = String(dateValue)
-      
-      // Already ISO format
-      if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        return dateStr.substring(0, 10)
-      }
-      
-      // Try parsing
-      const date = new Date(dateStr)
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split("T")[0]
+      // Validate date is within reasonable range (2020-2030)
+      if (date) {
+        const year = date.getFullYear()
+        if (year >= 2020 && year <= 2030) {
+          return date.toISOString().split("T")[0]
+        } else {
+          console.log(`[v0] EU Date Warning: Year ${year} out of range (2020-2030), raw value: ${dateValue}`)
+          return ""
+        }
       }
       
       return ""

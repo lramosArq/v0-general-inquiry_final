@@ -104,14 +104,34 @@ function mapGrantToFrontend(grant: any, source: "usa" | "eu" | "spain") {
     opportunityNumber = grant.callIdentifier || grant.topicIdentifier || grant.expedient || grant.id
   }
   
+  // Get dates - use openingDate for postedDate if available, otherwise publishDate
+  let postedDate = grant.openingDate || grant.publishDate
+  let closeDate = grant.deadline
+  
+  // Validate dates: closeDate must be after postedDate
+  // If they're swapped, fix them
+  if (postedDate && closeDate && closeDate < postedDate) {
+    const temp = postedDate
+    postedDate = closeDate
+    closeDate = temp
+  }
+  
+  // If no posted date, use a reasonable default based on close date
+  if (!postedDate && closeDate) {
+    // Assume posted 3 months before deadline
+    const deadlineDate = new Date(closeDate)
+    deadlineDate.setMonth(deadlineDate.getMonth() - 3)
+    postedDate = deadlineDate.toISOString().split("T")[0]
+  }
+  
   return {
     id: grant.id,
     opportunityNumber,
     title: grant.title,
     agency: grant.organization,
     status: grant.status || "Open",
-    postedDate: grant.publishDate,
-    closeDate: grant.deadline,
+    postedDate,
+    closeDate,
     description: grant.description,
     category: grant.category,
     fundingInstrument: grant.amount || grant.budget || grant.type,
